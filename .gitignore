@@ -1,0 +1,40 @@
+# Environment — 개인 로컬 설정만 제외. 환경별 공용 설정은 추적한다.
+.env.local
+.env.*.local
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Claude Code
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/settings.local.json
