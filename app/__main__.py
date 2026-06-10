@@ -7,8 +7,8 @@ rescrape-dispatcher 진입점.
 
 동작:
   Solr에서 설정된 조건에 맞는 URL을 주기적으로 조회해
-  keyword-collector 의 t_article_url 테이블에 재수집 대상으로 등록한다.
-  이후 실제 본문 추출은 keyword-collector 의 extraction worker 가 처리한다.
+  keyword-crawler 의 t_article_url 테이블에 재수집 대상으로 등록한다.
+  이후 실제 본문 추출은 keyword-crawler 의 extraction worker 가 처리한다.
 """
 
 from __future__ import annotations

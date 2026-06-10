@@ -1,7 +1,7 @@
 """
 DB 연결 관리: SSH 터널(선택) + SQLAlchemy 엔진.
 
-keyword-collector 와 같은 RDS 에 접속한다.
+keyword-crawler 와 같은 RDS 에 접속한다.
 t_article_url 테이블에 쓰기만 하므로 읽기는 필요 없다.
 
 사용법:

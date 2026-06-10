@@ -1,22 +1,17 @@
 """
-article_url 테이블 쓰기 접근 — 재수집 전용.
+article_url 테이블 쓰기 접근 — 신규 URL 투입 전용.
 
-keyword-collector 의 t_article_url 테이블에 URL 을 재투입한다.
-본 모듈은 INSERT / UPDATE 만 담당하며, 추출 워커가 이 데이터를 처리한다.
+keyword-crawler 의 t_article_url 테이블에 Solr 에서 조회한 신규 URL 을 삽입한다.
+이미 존재하는 URL 은 INSERT IGNORE 로 건드리지 않는다.
+본 모듈은 INSERT 만 담당하며, 추출 워커가 이 데이터를 처리한다.
 
-재투입 규칙:
-  - URL 이 테이블에 없음        → 신규 INSERT (status=discovered)
-  - 기존 status=stored          → UPDATE to discovered (재추출)
-  - 기존 status=failed_permanent → UPDATE to discovered (재시도)
-  - 기존 status=dead            → UPDATE to discovered (재시도)
-  - 기존 status=discovered      → 변경 없음 (이미 대기 중)
-  - 기존 status=extracting      → 변경 없음 (처리 중)
-  - 기존 status=failed_transient → 변경 없음 (재시도 예약됨)
+투입 규칙:
+  - URL 이 테이블에 없음 → status=discovered 로 INSERT
+  - URL 이 이미 존재함  → 변경 없음 (INSERT IGNORE)
 
-MySQL rowcount 해석 (ON DUPLICATE KEY UPDATE):
-  1  → 신규 INSERT
-  2  → 기존 행 UPDATE (status 변경됨)
-  0  → 중복이지만 값 변경 없음 (already discovered/extracting)
+MySQL rowcount 해석 (INSERT IGNORE):
+  1 → 신규 INSERT
+  0 → 중복, skip
 """
 
 from __future__ import annotations
@@ -31,7 +26,7 @@ from sqlalchemy import Engine, text
 from app.types import SolrDocument
 
 
-# 추적 파라미터 제거 목록 (keyword-collector url_normalizer 와 동일)
+# 추적 파라미터 제거 목록 (keyword-crawler url_normalizer 와 동일)
 _STRIP_PARAMS = re.compile(
     r"^(utm_source|utm_medium|utm_campaign|utm_term|utm_content"
     r"|fbclid|gclid|msclkid|ref|source)$",
@@ -40,7 +35,7 @@ _STRIP_PARAMS = re.compile(
 
 
 def _normalize(url: str) -> str:
-    """URL 정규화 — keyword-collector 와 동일한 로직으로 url_hash 일치를 보장한다."""
+    """URL 정규화 — keyword-crawler 와 동일한 로직으로 url_hash 일치를 보장한다."""
     parsed = urlparse(url.strip())
     scheme = "https"
     netloc = parsed.netloc.lower().rstrip(":")
@@ -56,10 +51,8 @@ def _url_hash(normalized_url: str) -> str:
     return hashlib.sha256(normalized_url.encode()).hexdigest()
 
 
-# stored / failed_permanent / dead 인 행만 discovered 로 리셋한다.
-# discovered / extracting / failed_transient 는 건드리지 않는다.
-_UPSERT_SQL = text("""
-    INSERT INTO t_article_url
+_INSERT_SQL = text("""
+    INSERT IGNORE INTO t_article_url
         (url, url_hash, host, portal_type, status,
          attempt_count, is_manual, priority,
          collected_date, created_at, updated_at)
@@ -67,11 +60,6 @@ _UPSERT_SQL = text("""
         (:url, :hash, :host, :portal, 'discovered',
          0, false, :priority,
          :cdate, NOW(), NOW())
-    ON DUPLICATE KEY UPDATE
-        status        = IF(status IN ('stored', 'failed_permanent', 'dead'), 'discovered', status),
-        attempt_count = IF(status IN ('stored', 'failed_permanent', 'dead'), 0, attempt_count),
-        next_retry_at = IF(status IN ('stored', 'failed_permanent', 'dead'), NULL, next_retry_at),
-        updated_at    = IF(status IN ('stored', 'failed_permanent', 'dead'), NOW(), updated_at)
 """)
 
 
@@ -79,18 +67,18 @@ class ArticleUrlRepo:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def bulk_upsert_rescrape(
+    def bulk_insert_new(
         self,
         docs: list[SolrDocument],
         priority: int,
     ) -> tuple[int, int]:
         """
-        Solr 문서 목록을 t_article_url 에 재투입한다.
+        Solr 문서 목록을 t_article_url 에 신규 투입한다.
+        이미 존재하는 URL 은 INSERT IGNORE 로 skip 된다.
 
-        반환: (total_docs, rows_affected)
-          - total_docs:   처리 시도한 문서 수
-          - rows_affected: DB 영향 행 수 합계
-              (신규 INSERT=1, status 변경 UPDATE=2, 변경 없음=0 의 합)
+        반환: (total_docs, inserted)
+          - total_docs: 처리 시도한 문서 수
+          - inserted:   실제 INSERT 된 신규 URL 수 (rowcount 합계)
         """
         if not docs:
             return 0, 0
@@ -109,6 +97,6 @@ class ArticleUrlRepo:
             })
 
         with self._engine.begin() as conn:
-            result = conn.execute(_UPSERT_SQL, rows)
+            result = conn.execute(_INSERT_SQL, rows)
 
         return len(rows), result.rowcount

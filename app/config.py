@@ -40,7 +40,7 @@ TUNNEL_SSH_USER     = _env("TUNNEL_SSH_USER", "ubuntu")
 TUNNEL_SSH_KEY_PATH = _env("TUNNEL_SSH_KEY_PATH")
 TUNNEL_LOCAL_PORT   = _env_int("TUNNEL_LOCAL_PORT", 13307)
 
-# RDS — keyword-collector 와 같은 DB에 접속
+# RDS — keyword-crawler 와 같은 DB에 접속
 RDS_HOST     = _env("RDS_HOST")
 RDS_PORT     = _env_int("RDS_PORT", 3306)
 RDS_USER     = _env("RDS_USER")
@@ -54,14 +54,15 @@ WORKER_ID = _env("WORKER_ID", "rescrape-1")
 SOLR_URL            = _env("SOLR_URL", "")
 HTTP_VERIFY_SSL     = _env_bool("HTTP_VERIFY_SSL", True)
 
-# 재수집 조건 쿼리
-SOLR_RESCRAPE_QUERY    = _env("SOLR_RESCRAPE_QUERY", "*:*")
-SOLR_RESCRAPE_FQ       = _env("SOLR_RESCRAPE_FQ", "")      # 예: collected_at:[* TO NOW-7DAYS]
-SOLR_QUERY_BATCH_SIZE  = _env_int("SOLR_QUERY_BATCH_SIZE", 100)
-SOLR_RESCRAPE_MAX_DOCS = _env_int("SOLR_RESCRAPE_MAX_DOCS", 1000)
+# Solr 조회 조건
+SOLR_RESCRAPE_QUERY        = _env("SOLR_RESCRAPE_QUERY", "*:*")
+SOLR_RESCRAPE_URL_CONTAINS = _env("SOLR_RESCRAPE_URL_CONTAINS", "")  # 쉼표 구분 패턴. 예: naver.com,daum.net
+SLIDING_WINDOW_MINUTES     = _env_int("SLIDING_WINDOW_MINUTES", 10)   # 슬라이딩 윈도우 크기(분). 주기의 2배 권장
+SOLR_QUERY_BATCH_SIZE      = _env_int("SOLR_QUERY_BATCH_SIZE", 100)
+SOLR_RESCRAPE_MAX_DOCS     = _env_int("SOLR_RESCRAPE_MAX_DOCS", 1000)
 
 # Dispatch
-DISPATCH_INTERVAL_SECONDS = _env_int("DISPATCH_INTERVAL_SECONDS", 3600)
+DISPATCH_INTERVAL_SECONDS = _env_int("DISPATCH_INTERVAL_SECONDS", 300)
 RESCRAPE_PRIORITY         = _env_int("RESCRAPE_PRIORITY", 5)
 
 # Logging

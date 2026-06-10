@@ -1,16 +1,13 @@
 """
-재수집 디스패처: Solr에서 조건에 맞는 URL을 조회해 t_article_url에 재투입한다.
+디스패처: Solr 에서 신규 URL 을 조회해 t_article_url 에 투입한다.
 
-전체 흐름:
-  Solr 에서 SOLR_RESCRAPE_QUERY + SOLR_RESCRAPE_FQ 조건으로 URL 목록 조회
-    → t_article_url 에 bulk upsert
-        - 신규 URL         → discovered 로 INSERT
-        - stored / failed_permanent / dead → discovered 로 UPDATE (재추출 트리거)
-        - discovered / extracting / failed_transient → 변경 없음 (이미 처리 중)
-    → DISPATCH_INTERVAL_SECONDS 만큼 대기 후 반복
+슬라이딩 윈도우 방식으로 동작한다:
+  매 사이클마다 collected_at 기준 최근 SLIDING_WINDOW_MINUTES 분 이내 문서를 조회해
+  t_article_url 에 INSERT IGNORE 로 신규 URL 만 삽입한다.
+  이미 존재하는 URL 은 skip 된다.
 
-이후 실제 본문 추출은 keyword-collector 의 extraction worker 가 담당한다.
-이 프로세스는 t_article_url 에 쓰기만 하고 읽거나 추출하지 않는다.
+  상태 저장 없음. 파일도 테이블도 필요 없다.
+  멀티 인스턴스로 실행해도 INSERT IGNORE 멱등성으로 안전하다.
 """
 
 from __future__ import annotations
@@ -29,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 KST = timezone(timedelta(hours=9))
 
-_ERROR_SLEEP_SEC = 30   # 예외 발생 후 빠른 루프 방지용 대기
+_ERROR_SLEEP_SEC = 30
 
 
 def run_dispatch_loop(worker_id: str) -> None:
@@ -40,7 +37,8 @@ def run_dispatch_loop(worker_id: str) -> None:
     )
     logger.info(
         f"config: query='{config.SOLR_RESCRAPE_QUERY}' "
-        f"fq='{config.SOLR_RESCRAPE_FQ}' "
+        f"window={config.SLIDING_WINDOW_MINUTES}min "
+        f"url_contains='{config.SOLR_RESCRAPE_URL_CONTAINS}' "
         f"max_docs={config.SOLR_RESCRAPE_MAX_DOCS} "
         f"interval={config.DISPATCH_INTERVAL_SECONDS}s",
         extra={"phase": "startup", "worker_id": worker_id},
@@ -70,7 +68,7 @@ def run_dispatch_loop(worker_id: str) -> None:
 
                 logger.info(
                     f"cycle={cycle} fetched={stats.total_fetched} "
-                    f"affected_rows={stats.rows_affected} "
+                    f"inserted={stats.inserted} "
                     f"elapsed={stats.cycle_seconds:.1f}s "
                     f"next_run={_next_run_kst(config.DISPATCH_INTERVAL_SECONDS)}",
                     extra={"phase": "cycle_done", "worker_id": worker_id},
@@ -87,7 +85,7 @@ def _run_one_cycle(
     worker_id: str,
 ) -> DispatchStats:
     """
-    Solr 조회 → DB upsert 1사이클.
+    Solr 조회 → DB insert 1사이클.
     예외 발생 시 ERROR 로그를 남기고 DispatchStats(0, 0) 를 반환해 루프를 유지한다.
     """
     started = time.monotonic()
@@ -105,33 +103,33 @@ def _run_one_cycle(
             extra={"phase": "solr_fetch", "worker_id": worker_id},
         )
         time.sleep(_ERROR_SLEEP_SEC)
-        return DispatchStats(total_fetched=0, rows_affected=0, cycle_seconds=elapsed)
+        return DispatchStats(total_fetched=0, inserted=0, cycle_seconds=elapsed)
 
     if not docs:
         return DispatchStats(
             total_fetched=0,
-            rows_affected=0,
+            inserted=0,
             cycle_seconds=time.monotonic() - started,
         )
 
     try:
-        total, affected = url_repo.bulk_upsert_rescrape(docs, priority=config.RESCRAPE_PRIORITY)
+        total, inserted = url_repo.bulk_insert_new(docs, priority=config.RESCRAPE_PRIORITY)
         logger.info(
-            f"db upsert total={total} affected_rows={affected}",
-            extra={"phase": "db_upsert", "worker_id": worker_id},
+            f"db insert total={total} inserted={inserted} skipped={total - inserted}",
+            extra={"phase": "db_insert", "worker_id": worker_id},
         )
     except Exception:
         elapsed = time.monotonic() - started
         logger.exception(
-            "DB upsert failed",
-            extra={"phase": "db_upsert", "worker_id": worker_id},
+            "DB insert failed",
+            extra={"phase": "db_insert", "worker_id": worker_id},
         )
         time.sleep(_ERROR_SLEEP_SEC)
-        return DispatchStats(total_fetched=len(docs), rows_affected=0, cycle_seconds=elapsed)
+        return DispatchStats(total_fetched=len(docs), inserted=0, cycle_seconds=elapsed)
 
     return DispatchStats(
         total_fetched=len(docs),
-        rows_affected=affected,
+        inserted=inserted,
         cycle_seconds=time.monotonic() - started,
     )
 

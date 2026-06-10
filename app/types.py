@@ -18,6 +18,6 @@ class SolrDocument:
 @dataclass
 class DispatchStats:
     """디스패치 1사이클 결과 집계."""
-    total_fetched:   int   # Solr 에서 가져온 총 URL 수
-    rows_affected:   int   # DB INSERT/UPDATE 영향 행 수 (new=1, requeue=2, skip=0)
-    cycle_seconds:   float # 사이클 소요 시간 (초)
+    total_fetched: int    # Solr 에서 가져온 총 URL 수
+    inserted:      int    # 실제 INSERT 된 신규 URL 수 (중복 skip 제외)
+    cycle_seconds: float  # 사이클 소요 시간 (초)
