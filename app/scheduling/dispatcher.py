@@ -2,7 +2,7 @@
 디스패처: Solr 에서 신규 URL 을 조회해 t_article_url 에 투입한다.
 
 슬라이딩 윈도우 방식으로 동작한다:
-  매 사이클마다 collected_at 기준 최근 SLIDING_WINDOW_MINUTES 분 이내 문서를 조회해
+  매 사이클마다 tstamp 기준 최근 SLIDING_WINDOW_MINUTES 분 이내 문서를 조회해
   t_article_url 에 INSERT IGNORE 로 신규 URL 만 삽입한다.
   이미 존재하는 URL 은 skip 된다.
 
@@ -38,6 +38,7 @@ def run_dispatch_loop(worker_id: str) -> None:
     logger.info(
         f"config: query='{config.SOLR_RESCRAPE_QUERY}' "
         f"window={config.SLIDING_WINDOW_MINUTES}min "
+        f"runtime_key='{config.SOLR_RESCRAPE_RUNTIME_KEY}' "
         f"url_contains='{config.SOLR_RESCRAPE_URL_CONTAINS}' "
         f"max_docs={config.SOLR_RESCRAPE_MAX_DOCS} "
         f"interval={config.DISPATCH_INTERVAL_SECONDS}s",

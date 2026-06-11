@@ -53,11 +53,11 @@ def _url_hash(normalized_url: str) -> str:
 
 _INSERT_SQL = text("""
     INSERT IGNORE INTO t_article_url
-        (url, url_hash, host, portal_type, status,
+        (url, url_hash, host, source_type, status,
          attempt_count, is_manual, priority,
          collected_date, created_at, updated_at)
     VALUES
-        (:url, :hash, :host, :portal, 'discovered',
+        (:url, :hash, :host, :source, 'discovered',
          0, false, :priority,
          :cdate, NOW(), NOW())
 """)
@@ -91,7 +91,7 @@ class ArticleUrlRepo:
                 "url":      norm,
                 "hash":     _url_hash(norm),
                 "host":     urlparse(norm).netloc,
-                "portal":   doc.portal_type,
+                "source":   doc.source_type,
                 "priority": priority,
                 "cdate":    now.date(),
             })

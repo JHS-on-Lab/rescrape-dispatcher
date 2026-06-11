@@ -139,7 +139,7 @@ services:
   # keyword-crawler — 발견 워커
   discover-naver-news:
     image: keyword-crawler:latest
-    command: ["--role", "discovery", "--portal", "naver_news"]
+    command: ["--role", "discovery", "--source", "naver_news"]
     env_file: keyword-crawler/.env.prod
 
   # keyword-crawler — 추출 워커

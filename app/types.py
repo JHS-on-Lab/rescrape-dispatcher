@@ -12,7 +12,7 @@ class SolrDocument:
     """Solr 에서 조회된 문서 한 건."""
     id: str           # url_hash (Solr 문서 id)
     url: str
-    portal_type: str
+    source_type: str
 
 
 @dataclass

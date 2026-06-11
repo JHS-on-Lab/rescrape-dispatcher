@@ -2,7 +2,7 @@
 Solr 조회 클라이언트 — 신규 URL 목록을 가져온다.
 
 슬라이딩 윈도우 방식으로 동작한다:
-  매 사이클마다 collected_at 기준 최근 SLIDING_WINDOW_MINUTES 분 이내 문서를 조회한다.
+  매 사이클마다 tstamp 기준 최근 SLIDING_WINDOW_MINUTES 분 이내 문서를 조회한다.
   상태 저장 없이 항상 'NOW - 윈도우'부터 'NOW'까지 고정 범위를 반복 조회한다.
   윈도우 내 중복 조회 문서는 INSERT IGNORE 로 무해하게 처리된다.
 
@@ -10,30 +10,29 @@ Solr cursor 기반 페이지네이션:
   - 첫 요청: cursorMark=*
   - 다음 요청: 이전 응답의 nextCursorMark 사용
   - 종료 조건: nextCursorMark == 이전 cursorMark (결과 소진)
-  - sort: collected_at asc, id asc (시간순 — 슬라이딩 윈도우에 필수)
+  - sort: tstamp asc, id asc (시간순 — 슬라이딩 윈도우에 필수)
 
 적용되는 fq (AND 결합):
-  collected_at:[NOW-{N}MINUTES TO NOW]  — 슬라이딩 윈도우 (자동)
-  SOLR_RESCRAPE_URL_CONTAINS            — URL contains 패턴 (설정 시)
+  tstamp:[NOW-{N}MINUTES TO NOW]   — 슬라이딩 윈도우 (자동)
+  crawl_runtime_key:{value}        — SOLR_RESCRAPE_RUNTIME_KEY 설정 시
+  SOLR_RESCRAPE_URL_CONTAINS       — URL contains 패턴 (설정 시)
 
 조회 필드:
-  id          — url_hash (keyword-crawler SolrSink 의 문서 id)
-  url         — 원본 URL
-  portal_type — 포털 유형 (NAVER_NEWS, DAUM_NEWS, etc.)
+  id  — 문서 id
+  url — 원본 URL
+
+source_type 은 Solr 스키마에 없으므로 조회하지 않고
+config.SOLR_RESCRAPE_SOURCE_TYPE("SOLR_RESCRAPE") 상수로 고정한다.
 """
 
 from __future__ import annotations
-
-import logging
 
 import httpx
 
 from app import config
 from app.types import SolrDocument
 
-logger = logging.getLogger(__name__)
-
-_FL = "id,url,portal_type"
+_FL = "id,url"
 
 
 class SolrClient:
@@ -43,6 +42,7 @@ class SolrClient:
         self._max_docs     = config.SOLR_RESCRAPE_MAX_DOCS
         self._query        = config.SOLR_RESCRAPE_QUERY
         self._window_min   = config.SLIDING_WINDOW_MINUTES
+        self._runtime_key  = config.SOLR_RESCRAPE_RUNTIME_KEY
         raw_contains       = config.SOLR_RESCRAPE_URL_CONTAINS
         self._url_contains = [p.strip() for p in raw_contains.split(",") if p.strip()] if raw_contains else []
         self._http         = httpx.Client(timeout=30.0, verify=config.HTTP_VERIFY_SSL)
@@ -54,7 +54,7 @@ class SolrClient:
     def query_rescrape_candidates(self) -> list[SolrDocument]:
         """
         슬라이딩 윈도우 조건으로 Solr 를 조회해 신규 URL 목록을 반환한다.
-        collected_at 기준 최근 SLIDING_WINDOW_MINUTES 분 이내 문서만 대상.
+        tstamp 기준 최근 SLIDING_WINDOW_MINUTES 분 이내 문서만 대상.
         SOLR_RESCRAPE_MAX_DOCS 를 초과하면 그 시점에서 중단한다.
         """
         results: list[SolrDocument] = []
@@ -67,22 +67,15 @@ class SolrClient:
                 "q":          self._query,
                 "fl":         _FL,
                 "rows":       batch_size,
-                "sort":       "collected_at asc, id asc",
+                "sort":       "tstamp asc, id asc",
                 "cursorMark": cursor,
                 "wt":         "json",
             }
             if fq:
                 params["fq"] = fq
 
-            try:
-                response = self._http.get(f"{self._base_url}/select", params=params)
-                response.raise_for_status()
-            except httpx.HTTPError as exc:
-                logger.error(
-                    f"Solr request failed: {exc}",
-                    extra={"phase": "solr_query"},
-                )
-                raise
+            response = self._http.get(f"{self._base_url}/select", params=params)
+            response.raise_for_status()
 
             data = response.json()
             docs = data.get("response", {}).get("docs", [])
@@ -92,13 +85,12 @@ class SolrClient:
 
             for doc in docs:
                 url = doc.get("url")
-                portal = doc.get("portal_type")
-                if not url or not portal:
+                if not url:
                     continue
                 results.append(SolrDocument(
                     id=doc.get("id", ""),
                     url=url,
-                    portal_type=portal,
+                    source_type=config.SOLR_RESCRAPE_SOURCE_TYPE,
                 ))
 
             next_cursor = data.get("nextCursorMark", cursor)
@@ -117,7 +109,9 @@ class SolrClient:
 
     def _build_fq(self) -> list[str]:
         """활성화된 fq 목록을 반환한다. 각 항목은 Solr 에서 AND 로 결합된다."""
-        fq: list[str] = [f"collected_at:[NOW-{self._window_min}MINUTES TO NOW]"]
+        fq: list[str] = [f"tstamp:[NOW-{self._window_min}MINUTES TO NOW]"]
+        if self._runtime_key:
+            fq.append(f"crawl_runtime_key:{self._runtime_key}")
         url_fq = self._build_url_contains_fq()
         if url_fq:
             fq.append(url_fq)
