@@ -17,6 +17,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 from app import config
+from app.repository.crawl_runtime_repo import CrawlRuntimeRepo
 from app.repository.db import db_context
 from app.repository.article_url_repo import ArticleUrlRepo
 from app.solr.client import SolrClient
@@ -49,12 +50,12 @@ def run_dispatch_loop(worker_id: str) -> None:
     last_heartbeat = time.monotonic()
     cycle = 0
 
-    solr = SolrClient()
+    with db_context() as engine:
+        solr_url = _resolve_solr_url(engine)
+        solr = SolrClient(solr_url)
+        url_repo = ArticleUrlRepo(engine)
 
-    try:
-        with db_context() as engine:
-            url_repo = ArticleUrlRepo(engine)
-
+        try:
             while True:
                 now = time.monotonic()
                 if now - last_heartbeat >= heartbeat_interval:
@@ -76,8 +77,8 @@ def run_dispatch_loop(worker_id: str) -> None:
                 )
 
                 time.sleep(config.DISPATCH_INTERVAL_SECONDS)
-    finally:
-        solr.close()
+        finally:
+            solr.close()
 
 
 def _run_one_cycle(
@@ -133,6 +134,18 @@ def _run_one_cycle(
         inserted=inserted,
         cycle_seconds=time.monotonic() - started,
     )
+
+
+def _resolve_solr_url(engine) -> str:
+    """t_crawl_runtime 테이블에서 SOLR_RUNTIME_NAME 에 해당하는 solr_url 을 가져온다."""
+    runtime_name = config.SOLR_RUNTIME_NAME
+    url = CrawlRuntimeRepo(engine).get_solr_url(runtime_name)
+    if not url:
+        raise RuntimeError(
+            f"t_crawl_runtime 에서 runtime_name='{runtime_name}' 을 찾을 수 없거나 "
+            f"use_yn='N' 입니다."
+        )
+    return url
 
 
 def _next_run_kst(interval_sec: int) -> str:

@@ -36,8 +36,8 @@ _FL = "id,url"
 
 
 class SolrClient:
-    def __init__(self) -> None:
-        self._base_url     = config.SOLR_URL.rstrip("/")
+    def __init__(self, solr_url: str) -> None:
+        self._base_url     = solr_url.rstrip("/")
         self._batch        = config.SOLR_QUERY_BATCH_SIZE
         self._max_docs     = config.SOLR_RESCRAPE_MAX_DOCS
         self._query        = config.SOLR_RESCRAPE_QUERY

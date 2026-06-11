@@ -51,7 +51,8 @@ RDS_DB       = _env("RDS_DB")
 WORKER_ID = _env("WORKER_ID", "rescrape-1")
 
 # Solr — 재수집 대상을 조회할 Solr 코어
-SOLR_URL            = _env("SOLR_URL", "")
+# solr_url 은 .env 에 직접 두지 않고 t_crawl_runtime 테이블에서 조회한다.
+SOLR_RUNTIME_NAME   = _env("SOLR_RUNTIME_NAME", "")  # t_crawl_runtime.runtime_name
 HTTP_VERIFY_SSL     = _env_bool("HTTP_VERIFY_SSL", True)
 
 # Solr 조회 조건
@@ -80,7 +81,7 @@ HEARTBEAT_INTERVAL_SECONDS = _env_int("HEARTBEAT_INTERVAL_SECONDS", 60)
 # 시작 시 검증
 # ---------------------------------------------------------------------------
 
-_REQUIRED_ALWAYS = ["RDS_HOST", "RDS_USER", "RDS_PASSWORD", "RDS_DB", "SOLR_URL"]
+_REQUIRED_ALWAYS = ["RDS_HOST", "RDS_USER", "RDS_PASSWORD", "RDS_DB", "SOLR_RUNTIME_NAME"]
 _REQUIRED_TUNNEL = ["TUNNEL_SSH_HOST", "TUNNEL_SSH_KEY_PATH"]
 
 
