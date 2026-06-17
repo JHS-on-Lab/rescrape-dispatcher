@@ -47,7 +47,7 @@ class DiConfigRepo:
 
         return DiConfig(
             solr_url       = (row[0] or "").strip(),
-            query          = (row[1] or "").strip() or "*:*",
+            query          = "*:*",
             filter_query   = (row[2] or "").strip(),
             timeperiod     = row[3] or 30,
             max_result_cnt = row[4] or 1000,
