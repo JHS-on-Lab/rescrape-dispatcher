@@ -2,7 +2,8 @@
 Solr 조회 건수 확인 스크립트.
 
 실행:
-  python scripts/check_solr_count.py
+  python scripts/check_solr_count.py             # 슬라이딩 윈도우 적용
+  python scripts/check_solr_count.py --no-window # tstamp 필터 없이 전체 조회
 
 접속 모드 (.env 설정에 따라 자동 선택):
   SOLR_DIRECT_ENABLED=true  → SOLR_URL 과 env 파라미터로 직접 접속
@@ -20,6 +21,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import argparse
 
 import httpx
 
@@ -63,24 +66,35 @@ def _resolve_di_config() -> DiConfig:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--no-window", action="store_true", help="tstamp 슬라이딩 윈도우 필터 제외 (전체 기간 조회)")
+    args = parser.parse_args()
+
     di_config = _resolve_di_config()
 
     solr_url = di_config.solr_url.rstrip("/")
     print(f"Solr URL     : {solr_url}")
     print(f"q            : {di_config.query}")
     print(f"filter_query : {di_config.filter_query or '(없음)'}")
-    print(f"window       : {di_config.timeperiod}분")
-    print()
 
-    fq = [f"tstamp:[NOW-{di_config.timeperiod}MINUTES TO NOW]"]
+    fq = []
+    if args.no_window:
+        print(f"window       : 미적용 (--no-window)")
+    else:
+        fq.append(f"tstamp:[NOW-{di_config.timeperiod}MINUTES TO NOW]")
+        print(f"window       : {di_config.timeperiod}분")
     if di_config.filter_query:
         fq.append(di_config.filter_query)
+    print()
 
     print("Solr 조회 중...")
     try:
+        params = {"q": di_config.query, "rows": 0, "wt": "json"}
+        if fq:
+            params["fq"] = fq
         resp = httpx.get(
             f"{solr_url}/select",
-            params={"q": di_config.query, "fq": fq, "rows": 0, "wt": "json"},
+            params=params,
             timeout=10,
             verify=config.HTTP_VERIFY_SSL,
         )
