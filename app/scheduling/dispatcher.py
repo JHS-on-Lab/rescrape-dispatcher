@@ -18,10 +18,10 @@ from datetime import datetime, timezone, timedelta
 
 from app import config
 from app.repository.di_config_repo import DiConfigRepo
+from app.types import DiConfig, DispatchStats
 from app.repository.db import db_context
 from app.repository.article_url_repo import ArticleUrlRepo
 from app.solr.client import SolrClient
-from app.types import DispatchStats
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +37,9 @@ def run_dispatch_loop(worker_id: str) -> None:
         extra={"phase": "startup", "worker_id": worker_id},
     )
     logger.info(
-        f"config: query='{config.SOLR_RESCRAPE_QUERY}' "
-        f"window={config.SLIDING_WINDOW_MINUTES}min "
-        f"runtime_key='{config.SOLR_RESCRAPE_RUNTIME_KEY}' "
-        f"url_contains='{config.SOLR_RESCRAPE_URL_CONTAINS}' "
-        f"max_docs={config.SOLR_RESCRAPE_MAX_DOCS} "
+        f"di_config: tnt_id='{config.DI_TNT_ID}' "
+        f"project_id='{config.DI_PROJECT_ID}' "
+        f"di_server_ip='{config.DI_SERVER_IP}' "
         f"interval={config.DISPATCH_INTERVAL_SECONDS}s",
         extra={"phase": "startup", "worker_id": worker_id},
     )
@@ -51,8 +49,14 @@ def run_dispatch_loop(worker_id: str) -> None:
     cycle = 0
 
     with db_context() as engine:
-        solr_url = _resolve_solr_url(engine)
-        solr = SolrClient(solr_url)
+        di_config = _resolve_di_config(engine)
+        logger.info(
+            f"solr: url='{di_config.solr_url}' "
+            f"window={di_config.timeperiod}min "
+            f"max={di_config.max_result_cnt}",
+            extra={"phase": "startup", "worker_id": worker_id},
+        )
+        solr = SolrClient(di_config)
         url_repo = ArticleUrlRepo(engine)
 
         try:
@@ -136,16 +140,16 @@ def _run_one_cycle(
     )
 
 
-def _resolve_solr_url(engine) -> str:
-    """trendtracker.t_di_config_v1 에서 Solr URL 을 가져온다."""
-    url = DiConfigRepo(engine).get_solr_url()
-    if not url:
+def _resolve_di_config(engine) -> DiConfig:
+    """trendtracker.t_di_config_v1 에서 Solr 설정을 가져온다."""
+    di_config = DiConfigRepo(engine).get_config()
+    if not di_config:
         raise RuntimeError(
             f"trendtracker.t_di_config_v1 에서 "
             f"tnt_id='{config.DI_TNT_ID}' project_id='{config.DI_PROJECT_ID}' "
-            f"di_server_ip='{config.DI_SERVER_IP}' 에 해당하는 행을 찾을 수 없습니다."
+            f"di_server_ip='{config.DI_SERVER_IP}' 에 해당하는 행을 찾을 수 없거나 use_yn='N' 입니다."
         )
-    return url
+    return di_config
 
 
 def _next_run_kst(interval_sec: int) -> str:

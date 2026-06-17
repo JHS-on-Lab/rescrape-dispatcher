@@ -60,13 +60,8 @@ DI_PROJECT_ID   = _env("DI_PROJECT_ID", "")
 DI_SERVER_IP    = _env("DI_SERVER_IP", "")
 HTTP_VERIFY_SSL = _env_bool("HTTP_VERIFY_SSL", True)
 
-# Solr 조회 조건
-SOLR_RESCRAPE_QUERY        = _env("SOLR_RESCRAPE_QUERY", "*:*")
-SOLR_RESCRAPE_URL_CONTAINS = _env("SOLR_RESCRAPE_URL_CONTAINS", "")  # 쉼표 구분 패턴. 예: naver.com,daum.net
-SOLR_RESCRAPE_RUNTIME_KEY  = _env("SOLR_RESCRAPE_RUNTIME_KEY", "")   # crawl_runtime_key 필터값. 비어있으면 필터 미적용
-SLIDING_WINDOW_MINUTES     = _env_int("SLIDING_WINDOW_MINUTES", 10)   # 슬라이딩 윈도우 크기(분). 주기의 2배 권장
-SOLR_QUERY_BATCH_SIZE      = _env_int("SOLR_QUERY_BATCH_SIZE", 100)
-SOLR_RESCRAPE_MAX_DOCS     = _env_int("SOLR_RESCRAPE_MAX_DOCS", 1000)
+# Solr 조회 조건 — query / filter_query / timeperiod / max_result_cnt 는 t_di_config_v1 에서 조회
+SOLR_QUERY_BATCH_SIZE = _env_int("SOLR_QUERY_BATCH_SIZE", 100)  # Solr 요청 1회당 rows
 
 # 재수집 source_type 고정값 — Solr 에서 오는 URL 임을 식별하기 위한 상수
 SOLR_RESCRAPE_SOURCE_TYPE  = "SOLR_RESCRAPE"

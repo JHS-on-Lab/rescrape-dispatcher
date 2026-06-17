@@ -1,8 +1,8 @@
 """
-trendtracker.t_di_config_v1 조회 — Solr 접속 정보 획득.
+trendtracker.t_di_config_v1 조회 — Solr 접속·쿼리 설정 획득.
 
 tnt_id, project_id, di_server_ip 세 조건으로 1행을 조회하고
-Solr URL 을 반환한다. 값은 .env 의 DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP 로 지정.
+DiConfig 를 반환한다. 조건값은 .env 의 DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 from sqlalchemy import Engine, text
 
 from app import config
+from app.types import DiConfig
 
 
 class DiConfigRepo:
@@ -17,15 +18,16 @@ class DiConfigRepo:
         self._engine = engine
         self._schema = config.TRENDTRACKER_DB
 
-    def get_solr_url(self) -> str | None:
+    def get_config(self) -> DiConfig | None:
         """
-        t_di_config_v1 에서 Solr URL 을 조회한다.
+        t_di_config_v1 에서 Solr 설정을 조회한다.
         행이 없거나 use_yn='N' 이면 None.
         """
         with self._engine.connect() as conn:
             row = conn.execute(
                 text(f"""
-                    SELECT solr_url
+                    SELECT solr_url, custrom_query, filter_query,
+                           default_timeperiod, solr_max_result_cnt
                     FROM {self._schema}.t_di_config_v1
                     WHERE tnt_id       = :tnt_id
                       AND project_id   = :project_id
@@ -40,4 +42,13 @@ class DiConfigRepo:
                 },
             ).fetchone()
 
-        return row[0] if row else None
+        if row is None:
+            return None
+
+        return DiConfig(
+            solr_url       = row[0] or "",
+            query          = row[1] or "*:*",
+            filter_query   = row[2] or "",
+            timeperiod     = row[3] or 30,
+            max_result_cnt = row[4] or 1000,
+        )
