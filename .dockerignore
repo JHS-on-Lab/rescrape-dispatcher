@@ -17,6 +17,12 @@ __pycache__/
 .git/
 .gitignore
 
+# 배포 스크립트 — 이미지 안에서 실행할 파일이 아님
+deploy/
+
+# 테스트·진단 스크립트
+scripts/
+
 # 개발 도구
 docs/
 .claude/
