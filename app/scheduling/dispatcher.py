@@ -58,6 +58,8 @@ def run_dispatch_loop(worker_id: str) -> None:
         di_config = _resolve_di_config(engine)
         logger.info(
             f"solr: url='{di_config.solr_url}' "
+            f"q='{di_config.query}' "
+            f"filter_query='{di_config.filter_query or '(없음)'}' "
             f"window={di_config.timeperiod}min "
             f"max={di_config.max_result_cnt}",
             extra={"phase": "startup", "worker_id": worker_id},
