@@ -52,15 +52,15 @@ class SolrClient:
     # 공개 API
     # ------------------------------------------------------------------
 
-    def query_rescrape_candidates(self) -> list[SolrDocument]:
+    def query_rescrape_candidates(self) -> tuple[list[SolrDocument], str]:
         """
-        슬라이딩 윈도우 조건으로 Solr 를 조회해 신규 URL 목록을 반환한다.
+        슬라이딩 윈도우 조건으로 Solr 를 조회해 신규 URL 목록과 조회 범위 문자열을 반환한다.
         tstamp 기준 최근 {timeperiod}분 이내 문서만 대상.
         max_result_cnt 를 초과하면 그 시점에서 중단한다.
         """
         results: list[SolrDocument] = []
         cursor = "*"
-        fq = self._build_fq()
+        fq, time_range = self._build_fq()
 
         while len(results) < self._max_docs:
             batch_size = min(self._batch, self._max_docs - len(results))
@@ -99,7 +99,7 @@ class SolrClient:
                 break
             cursor = next_cursor
 
-        return results
+        return results, time_range
 
     def close(self) -> None:
         self._http.close()
@@ -108,8 +108,8 @@ class SolrClient:
     # 내부 구현
     # ------------------------------------------------------------------
 
-    def _build_fq(self) -> list[str]:
-        """활성화된 fq 목록을 반환한다. 각 항목은 Solr 에서 AND 로 결합된다."""
+    def _build_fq(self) -> tuple[list[str], str]:
+        """활성화된 fq 목록과 조회 시간 범위 문자열을 반환한다."""
         now_utc   = datetime.now(timezone.utc)
         start_utc = now_utc - timedelta(minutes=self._window_min)
         ts_now   = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -117,4 +117,4 @@ class SolrClient:
         fq: list[str] = [f"tstamp:[{ts_start} TO {ts_now}]"]
         if self._filter_query:
             fq.append(self._filter_query)
-        return fq
+        return fq, f"{ts_start} ~ {ts_now}"

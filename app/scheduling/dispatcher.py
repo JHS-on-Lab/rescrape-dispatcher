@@ -103,9 +103,9 @@ def _run_one_cycle(
     started = time.monotonic()
 
     try:
-        docs = solr.query_rescrape_candidates()
+        docs, time_range = solr.query_rescrape_candidates()
         logger.info(
-            f"solr fetched={len(docs)}",
+            f"solr fetched={len(docs)} range={time_range}",
             extra={"phase": "solr_fetch", "worker_id": worker_id},
         )
     except Exception:
