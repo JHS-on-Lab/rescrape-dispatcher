@@ -24,8 +24,11 @@ from app.types import DiConfig
 
 
 def _resolve_di_config() -> DiConfig:
-    if config.SOLR_URL:
-        print("[모드] 직접 접속 (SOLR_URL)")
+    if config.SOLR_DIRECT_ENABLED:
+        if not config.SOLR_URL:
+            print("[오류] SOLR_DIRECT_ENABLED=true 이지만 SOLR_URL 이 설정되지 않았습니다.")
+            sys.exit(1)
+        print("[모드] 직접 접속 (SOLR_DIRECT_ENABLED=true)")
         return DiConfig(
             solr_url=config.SOLR_URL,
             query=config.SOLR_QUERY,
@@ -35,7 +38,7 @@ def _resolve_di_config() -> DiConfig:
         )
 
     if not (config.DI_TNT_ID and config.DI_PROJECT_ID and config.DI_SERVER_IP):
-        print("[오류] SOLR_URL 또는 DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP 를 .env 에 설정하세요.")
+        print("[오류] DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP 를 .env 에 설정하세요.")
         sys.exit(1)
 
     print(

@@ -52,8 +52,9 @@ RDS_TRENDTRACKER_DB  = _env("RDS_TRENDTRACKER_DB", "trendtracker")  # SELECT 대
 WORKER_ID = _env("WORKER_ID", "rescrape-1")
 
 # Solr 접속 모드
-# [직접 모드] SOLR_URL 이 있으면 해당 URL 과 아래 파라미터를 그대로 사용한다.
-# [DB 조회 모드] SOLR_URL 이 없으면 DI_* 조건으로 trendtracker.t_di_config_v1 에서 모든 파라미터를 가져온다.
+# [직접 모드] SOLR_DIRECT_ENABLED=true → SOLR_URL 과 아래 파라미터를 그대로 사용한다.
+# [DB 조회 모드] SOLR_DIRECT_ENABLED=false → DI_* 조건으로 trendtracker.t_di_config_v1 에서 모든 파라미터를 가져온다.
+SOLR_DIRECT_ENABLED    = _env_bool("SOLR_DIRECT_ENABLED")
 SOLR_URL               = _env("SOLR_URL", "")
 SOLR_QUERY             = _env("SOLR_QUERY", "*:*")        # 직접 모드 q 파라미터
 SOLR_FILTER_QUERY      = _env("SOLR_FILTER_QUERY", "")    # 직접 모드 fq 파라미터
@@ -103,8 +104,8 @@ def validate() -> None:
     if TUNNEL_ENABLED:
         missing += [k for k in _REQUIRED_TUNNEL if not os.getenv(k)]
 
-    # SOLR_URL 없으면 DB 조회 모드 → DI_* 세 값이 필수
-    if not SOLR_URL:
+    # DB 조회 모드 → DI_* 세 값이 필수
+    if not SOLR_DIRECT_ENABLED:
         missing += [k for k in _REQUIRED_DB_MODE if not os.getenv(k)]
 
     if not missing:

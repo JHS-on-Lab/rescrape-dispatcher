@@ -36,9 +36,9 @@ def run_dispatch_loop(worker_id: str) -> None:
         "dispatch loop started",
         extra={"phase": "startup", "worker_id": worker_id},
     )
-    if config.SOLR_URL:
+    if config.SOLR_DIRECT_ENABLED:
         logger.info(
-            f"solr 모드: 직접 접속 (SOLR_URL) interval={config.DISPATCH_INTERVAL_SECONDS}s",
+            f"solr 모드: 직접 접속 (SOLR_DIRECT_ENABLED=true) interval={config.DISPATCH_INTERVAL_SECONDS}s",
             extra={"phase": "startup", "worker_id": worker_id},
         )
     else:
@@ -147,8 +147,8 @@ def _run_one_cycle(
 
 
 def _resolve_di_config(engine) -> DiConfig:
-    """직접 모드(SOLR_URL) 또는 DB 조회 모드로 Solr 설정을 반환한다."""
-    if config.SOLR_URL:
+    """직접 모드(SOLR_DIRECT_ENABLED) 또는 DB 조회 모드로 Solr 설정을 반환한다."""
+    if config.SOLR_DIRECT_ENABLED:
         return DiConfig(
             solr_url=config.SOLR_URL,
             query=config.SOLR_QUERY,

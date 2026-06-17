@@ -5,8 +5,8 @@ Solr 연결 확인 스크립트.
   python scripts/check_solr.py
 
 접속 모드 (.env 설정에 따라 자동 선택):
-  SOLR_URL 이 있으면  → 직접 접속
-  SOLR_URL 이 없으면  → DI_* 조건으로 trendtracker.t_di_config_v1 조회 후 접속
+  SOLR_DIRECT_ENABLED=true  → SOLR_URL 로 직접 접속
+  SOLR_DIRECT_ENABLED=false → DI_* 조건으로 trendtracker.t_di_config_v1 조회 후 접속
 
 확인 항목:
   1. solr_url 결정 (직접 or DB 조회)
@@ -25,12 +25,15 @@ from app import config
 
 
 def _get_solr_url() -> str:
-    if config.SOLR_URL:
-        print("[모드] 직접 접속 (SOLR_URL)")
+    if config.SOLR_DIRECT_ENABLED:
+        if not config.SOLR_URL:
+            print("[오류] SOLR_DIRECT_ENABLED=true 이지만 SOLR_URL 이 설정되지 않았습니다.")
+            sys.exit(1)
+        print("[모드] 직접 접속 (SOLR_DIRECT_ENABLED=true)")
         return config.SOLR_URL
 
     if not (config.DI_TNT_ID and config.DI_PROJECT_ID and config.DI_SERVER_IP):
-        print("[오류] SOLR_URL 또는 DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP 를 .env 에 설정하세요.")
+        print("[오류] DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP 를 .env 에 설정하세요.")
         sys.exit(1)
 
     print(
