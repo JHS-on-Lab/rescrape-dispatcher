@@ -26,8 +26,7 @@ class DiConfigRepo:
         with self._engine.connect() as conn:
             row = conn.execute(
                 text(f"""
-                    SELECT solr_url, custrom_query, filter_query,
-                           default_timeperiod, solr_max_result_cnt
+                    SELECT solr_url, custrom_query, filter_query
                     FROM {self._schema}.t_di_config_v1
                     WHERE tnt_id       = :tnt_id
                       AND project_id   = :project_id
@@ -47,8 +46,8 @@ class DiConfigRepo:
 
         return DiConfig(
             solr_url       = (row[0] or "").strip(),
-            query          = "*:*",
+            query          = (row[1] or "").strip() or "*:*",
             filter_query   = (row[2] or "").strip(),
-            timeperiod     = row[3] or 30,
-            max_result_cnt = row[4] or 1000,
+            timeperiod     = config.SLIDING_WINDOW_MINUTES,
+            max_result_cnt = config.SOLR_MAX_DOCS,
         )
