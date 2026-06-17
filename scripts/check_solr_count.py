@@ -1,0 +1,73 @@
+"""
+Solr 조회 건수 확인 스크립트.
+
+실행:
+  python scripts/check_solr_count.py
+
+trendtracker.t_di_config_v1 에서 solr_url / filter_query / timeperiod 를 읽어
+슬라이딩 윈도우 조건으로 Solr 에 rows=0 조회한다 (문서 내용 불필요, 건수만).
+
+filter_query 예시:
+  crawl_runtime_key:"127.0.0.1_bc_kr_cns_pr"
+
+적용되는 fq:
+  tstamp:[NOW-{timeperiod}MINUTES TO NOW]   — 슬라이딩 윈도우
+  {filter_query}                            — t_di_config_v1.filter_query (설정 시)
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import httpx
+
+from app import config
+from app.repository.db import db_context
+from app.repository.di_config_repo import DiConfigRepo
+
+
+def main() -> None:
+    print("조회 조건 (t_di_config_v1)")
+    print(f"  tnt_id       : {config.DI_TNT_ID}")
+    print(f"  project_id   : {config.DI_PROJECT_ID}")
+    print(f"  di_server_ip : {config.DI_SERVER_IP}")
+    print()
+
+    with db_context() as engine:
+        di_config = DiConfigRepo(engine).get_config()
+
+    if not di_config:
+        print("[오류] t_di_config_v1 에서 조건에 맞는 행이 없거나 use_yn='N' 입니다.")
+        sys.exit(1)
+
+    solr_url = di_config.solr_url.rstrip("/")
+    print(f"Solr URL     : {solr_url}")
+    print(f"q            : {di_config.query}")
+    print(f"filter_query : {di_config.filter_query or '(없음)'}")
+    print(f"window       : {di_config.timeperiod}분")
+    print()
+
+    fq = [f"tstamp:[NOW-{di_config.timeperiod}MINUTES TO NOW]"]
+    if di_config.filter_query:
+        fq.append(di_config.filter_query)
+
+    print("Solr 조회 중...")
+    try:
+        resp = httpx.get(
+            f"{solr_url}/select",
+            params={"q": di_config.query, "fq": fq, "rows": 0, "wt": "json"},
+            timeout=10,
+            verify=config.HTTP_VERIFY_SSL,
+        )
+        resp.raise_for_status()
+        num_found = resp.json().get("response", {}).get("numFound", 0)
+    except Exception as e:
+        print(f"[오류] Solr 조회 실패: {e}")
+        sys.exit(1)
+
+    print(f"조회된 문서 수: {num_found:,}건")
+
+
+if __name__ == "__main__":
+    main()
