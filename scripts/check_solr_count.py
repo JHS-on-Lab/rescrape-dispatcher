@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import argparse
+from datetime import datetime, timezone, timedelta
 
 import httpx
 
@@ -81,8 +82,12 @@ def main() -> None:
     if args.no_window:
         print(f"window       : 미적용 (--no-window)")
     else:
-        fq.append(f"tstamp:[NOW-{di_config.timeperiod}MINUTES TO NOW]")
-        print(f"window       : {di_config.timeperiod}분")
+        now_utc   = datetime.now(timezone.utc)
+        start_utc = now_utc - timedelta(minutes=di_config.timeperiod)
+        ts_now   = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts_start = start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        fq.append(f"tstamp:[{ts_start} TO {ts_now}]")
+        print(f"window       : {di_config.timeperiod}분 ({ts_start} ~ {ts_now})")
     if di_config.filter_query:
         fq.append(di_config.filter_query)
     print()

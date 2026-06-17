@@ -28,6 +28,8 @@ config.SOLR_RESCRAPE_SOURCE_TYPE("SOLR_RESCRAPE") 상수로 고정한다.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone, timedelta
+
 import httpx
 
 from app import config
@@ -108,7 +110,11 @@ class SolrClient:
 
     def _build_fq(self) -> list[str]:
         """활성화된 fq 목록을 반환한다. 각 항목은 Solr 에서 AND 로 결합된다."""
-        fq: list[str] = [f"tstamp:[NOW-{self._window_min}MINUTES TO NOW]"]
+        now_utc   = datetime.now(timezone.utc)
+        start_utc = now_utc - timedelta(minutes=self._window_min)
+        ts_now   = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts_start = start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        fq: list[str] = [f"tstamp:[{ts_start} TO {ts_now}]"]
         if self._filter_query:
             fq.append(self._filter_query)
         return fq
