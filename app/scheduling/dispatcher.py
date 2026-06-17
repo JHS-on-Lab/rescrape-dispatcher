@@ -36,13 +36,19 @@ def run_dispatch_loop(worker_id: str) -> None:
         "dispatch loop started",
         extra={"phase": "startup", "worker_id": worker_id},
     )
-    logger.info(
-        f"di_config: tnt_id='{config.DI_TNT_ID}' "
-        f"project_id='{config.DI_PROJECT_ID}' "
-        f"di_server_ip='{config.DI_SERVER_IP}' "
-        f"interval={config.DISPATCH_INTERVAL_SECONDS}s",
-        extra={"phase": "startup", "worker_id": worker_id},
-    )
+    if config.SOLR_URL:
+        logger.info(
+            f"solr 모드: 직접 접속 (SOLR_URL) interval={config.DISPATCH_INTERVAL_SECONDS}s",
+            extra={"phase": "startup", "worker_id": worker_id},
+        )
+    else:
+        logger.info(
+            f"solr 모드: DB 조회 — tnt_id='{config.DI_TNT_ID}' "
+            f"project_id='{config.DI_PROJECT_ID}' "
+            f"di_server_ip='{config.DI_SERVER_IP}' "
+            f"interval={config.DISPATCH_INTERVAL_SECONDS}s",
+            extra={"phase": "startup", "worker_id": worker_id},
+        )
 
     heartbeat_interval = config.HEARTBEAT_INTERVAL_SECONDS
     last_heartbeat = time.monotonic()
@@ -141,7 +147,16 @@ def _run_one_cycle(
 
 
 def _resolve_di_config(engine) -> DiConfig:
-    """trendtracker.t_di_config_v1 에서 Solr 설정을 가져온다."""
+    """직접 모드(SOLR_URL) 또는 DB 조회 모드로 Solr 설정을 반환한다."""
+    if config.SOLR_URL:
+        return DiConfig(
+            solr_url=config.SOLR_URL,
+            query=config.SOLR_QUERY,
+            filter_query=config.SOLR_FILTER_QUERY,
+            timeperiod=config.SLIDING_WINDOW_MINUTES,
+            max_result_cnt=config.SOLR_MAX_DOCS,
+        )
+
     di_config = DiConfigRepo(engine).get_config()
     if not di_config:
         raise RuntimeError(

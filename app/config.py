@@ -53,15 +53,23 @@ TRENDTRACKER_DB   = _env("TRENDTRACKER_DB", "trendtracker")
 # Worker
 WORKER_ID = _env("WORKER_ID", "rescrape-1")
 
-# Solr — 접속 정보는 trendtracker.t_di_config_v1 에서 조회
-# WHERE tnt_id = DI_TNT_ID AND project_id = DI_PROJECT_ID AND di_server_ip = DI_SERVER_IP
+# Solr 접속 모드
+# [직접 모드] SOLR_URL 이 있으면 해당 URL 과 아래 파라미터를 그대로 사용한다.
+# [DB 조회 모드] SOLR_URL 이 없으면 DI_* 조건으로 trendtracker.t_di_config_v1 에서 모든 파라미터를 가져온다.
+SOLR_URL               = _env("SOLR_URL", "")
+SOLR_QUERY             = _env("SOLR_QUERY", "*:*")        # 직접 모드 q 파라미터
+SOLR_FILTER_QUERY      = _env("SOLR_FILTER_QUERY", "")    # 직접 모드 fq 파라미터
+SLIDING_WINDOW_MINUTES = _env_int("SLIDING_WINDOW_MINUTES", 30)  # 직접 모드 슬라이딩 윈도우(분)
+SOLR_MAX_DOCS          = _env_int("SOLR_MAX_DOCS", 1000)  # 직접 모드 최대 조회 수
+
+# DB 조회 모드 조건 (SOLR_URL 비워둔 경우에만 사용)
 DI_TNT_ID       = _env("DI_TNT_ID", "")
 DI_PROJECT_ID   = _env("DI_PROJECT_ID", "")
 DI_SERVER_IP    = _env("DI_SERVER_IP", "")
 HTTP_VERIFY_SSL = _env_bool("HTTP_VERIFY_SSL", True)
 
-# Solr 조회 조건 — query / filter_query / timeperiod / max_result_cnt 는 t_di_config_v1 에서 조회
-SOLR_QUERY_BATCH_SIZE = _env_int("SOLR_QUERY_BATCH_SIZE", 100)  # Solr 요청 1회당 rows
+# Solr 요청 1회당 rows (직접/DB 모드 공통)
+SOLR_QUERY_BATCH_SIZE = _env_int("SOLR_QUERY_BATCH_SIZE", 100)
 
 # 재수집 source_type 고정값 — Solr 에서 오는 URL 임을 식별하기 위한 상수
 SOLR_RESCRAPE_SOURCE_TYPE  = "SOLR_RESCRAPE"
@@ -81,9 +89,9 @@ HEARTBEAT_INTERVAL_SECONDS = _env_int("HEARTBEAT_INTERVAL_SECONDS", 60)
 # 시작 시 검증
 # ---------------------------------------------------------------------------
 
-_REQUIRED_ALWAYS = ["RDS_HOST", "RDS_USER", "RDS_PASSWORD", "RDS_DB",
-                    "DI_TNT_ID", "DI_PROJECT_ID", "DI_SERVER_IP"]
-_REQUIRED_TUNNEL = ["TUNNEL_SSH_HOST", "TUNNEL_SSH_KEY_PATH"]
+_REQUIRED_ALWAYS   = ["RDS_HOST", "RDS_USER", "RDS_PASSWORD", "RDS_DB"]
+_REQUIRED_TUNNEL   = ["TUNNEL_SSH_HOST", "TUNNEL_SSH_KEY_PATH"]
+_REQUIRED_DB_MODE  = ["DI_TNT_ID", "DI_PROJECT_ID", "DI_SERVER_IP"]
 
 
 def validate() -> None:
@@ -96,6 +104,10 @@ def validate() -> None:
 
     if TUNNEL_ENABLED:
         missing += [k for k in _REQUIRED_TUNNEL if not os.getenv(k)]
+
+    # SOLR_URL 없으면 DB 조회 모드 → DI_* 세 값이 필수
+    if not SOLR_URL:
+        missing += [k for k in _REQUIRED_DB_MODE if not os.getenv(k)]
 
     if not missing:
         return
