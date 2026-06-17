@@ -16,7 +16,7 @@ from app.types import DiConfig
 class DiConfigRepo:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
-        self._schema = config.TRENDTRACKER_DB
+        self._schema = config.RDS_TRENDTRACKER_DB
 
     def get_config(self) -> DiConfig | None:
         """

@@ -22,7 +22,7 @@ from app import config
 def _dsn(host: str, port: int) -> str:
     return (
         f"mysql+pymysql://{config.RDS_USER}:{config.RDS_PASSWORD}"
-        f"@{host}:{port}/{config.RDS_DB}"
+        f"@{host}:{port}/{config.RDS_CRAWLER_DB}"
         f"?charset=utf8mb4"
     )
 

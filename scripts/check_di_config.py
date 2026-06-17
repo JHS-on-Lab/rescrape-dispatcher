@@ -24,7 +24,7 @@ def main() -> None:
     print(f"  tnt_id       : {config.DI_TNT_ID}")
     print(f"  project_id   : {config.DI_PROJECT_ID}")
     print(f"  di_server_ip : {config.DI_SERVER_IP}")
-    print(f"  schema       : {config.TRENDTRACKER_DB}")
+    print(f"  schema       : {config.RDS_TRENDTRACKER_DB}")
     print()
 
     with db_context() as engine:
@@ -32,7 +32,7 @@ def main() -> None:
             row = conn.execute(
                 text(f"""
                     SELECT *
-                    FROM {config.TRENDTRACKER_DB}.t_di_config_v1
+                    FROM {config.RDS_TRENDTRACKER_DB}.t_di_config_v1
                     WHERE tnt_id       = :tnt_id
                       AND project_id   = :project_id
                       AND di_server_ip = :di_server_ip

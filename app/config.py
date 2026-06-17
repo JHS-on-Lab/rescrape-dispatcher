@@ -41,14 +41,12 @@ TUNNEL_SSH_KEY_PATH = _env("TUNNEL_SSH_KEY_PATH")
 TUNNEL_LOCAL_PORT   = _env_int("TUNNEL_LOCAL_PORT", 13307)
 
 # RDS — keyword-crawler 와 같은 DB 서버에 접속
-# RDS_DB: t_article_url 이 있는 스키마 (crawlerdb)
-# trendtracker.t_di_config_v1 은 TRENDTRACKER_DB 스키마 prefix 로 접근
-RDS_HOST          = _env("RDS_HOST")
-RDS_PORT          = _env_int("RDS_PORT", 3306)
-RDS_USER          = _env("RDS_USER")
-RDS_PASSWORD      = _env("RDS_PASSWORD")
-RDS_DB            = _env("RDS_DB")
-TRENDTRACKER_DB   = _env("TRENDTRACKER_DB", "trendtracker")
+RDS_HOST             = _env("RDS_HOST")
+RDS_PORT             = _env_int("RDS_PORT", 3306)
+RDS_USER             = _env("RDS_USER")
+RDS_PASSWORD         = _env("RDS_PASSWORD")
+RDS_CRAWLER_DB       = _env("RDS_CRAWLER_DB")       # INSERT 대상 (t_article_url)
+RDS_TRENDTRACKER_DB  = _env("RDS_TRENDTRACKER_DB", "trendtracker")  # SELECT 대상 (t_di_config_v1)
 
 # Worker
 WORKER_ID = _env("WORKER_ID", "rescrape-1")
@@ -89,7 +87,7 @@ HEARTBEAT_INTERVAL_SECONDS = _env_int("HEARTBEAT_INTERVAL_SECONDS", 60)
 # 시작 시 검증
 # ---------------------------------------------------------------------------
 
-_REQUIRED_ALWAYS   = ["RDS_HOST", "RDS_USER", "RDS_PASSWORD", "RDS_DB"]
+_REQUIRED_ALWAYS   = ["RDS_HOST", "RDS_USER", "RDS_PASSWORD", "RDS_CRAWLER_DB"]
 _REQUIRED_TUNNEL   = ["TUNNEL_SSH_HOST", "TUNNEL_SSH_KEY_PATH"]
 _REQUIRED_DB_MODE  = ["DI_TNT_ID", "DI_PROJECT_ID", "DI_SERVER_IP"]
 

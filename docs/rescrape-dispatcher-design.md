@@ -235,7 +235,8 @@ app/
 | `RDS_PORT` | `3306` | MySQL 포트 |
 | `RDS_USER` | (필수) | MySQL 사용자 |
 | `RDS_PASSWORD` | (필수) | MySQL 비밀번호 |
-| `RDS_DB` | (필수) | MySQL 데이터베이스명 |
+| `RDS_CRAWLER_DB` | (필수) | INSERT 대상 스키마 (t_article_url) |
+| `RDS_TRENDTRACKER_DB` | `trendtracker` | SELECT 대상 스키마 (t_di_config_v1) |
 | `TUNNEL_ENABLED` | `false` | SSH 터널 사용 여부 |
 | `TUNNEL_SSH_HOST` | — | SSH 서버 호스트 |
 | `TUNNEL_SSH_PORT` | `22` | SSH 서버 포트 |
