@@ -1,6 +1,5 @@
-# Environment — 개인 로컬 설정만 제외. 환경별 공용 설정은 추적한다.
-.env.local
-.env.*.local
+# Environment
+.env*
 
 # Virtual environments
 .venv/
