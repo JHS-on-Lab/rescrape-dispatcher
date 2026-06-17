@@ -17,7 +17,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 from app import config
-from app.repository.crawl_runtime_repo import CrawlRuntimeRepo
+from app.repository.di_config_repo import DiConfigRepo
 from app.repository.db import db_context
 from app.repository.article_url_repo import ArticleUrlRepo
 from app.solr.client import SolrClient
@@ -137,13 +137,13 @@ def _run_one_cycle(
 
 
 def _resolve_solr_url(engine) -> str:
-    """t_crawl_runtime 테이블에서 SOLR_RUNTIME_NAME 에 해당하는 solr_url 을 가져온다."""
-    runtime_name = config.SOLR_RUNTIME_NAME
-    url = CrawlRuntimeRepo(engine).get_solr_url(runtime_name)
+    """trendtracker.t_di_config_v1 에서 Solr URL 을 가져온다."""
+    url = DiConfigRepo(engine).get_solr_url()
     if not url:
         raise RuntimeError(
-            f"t_crawl_runtime 에서 runtime_name='{runtime_name}' 을 찾을 수 없거나 "
-            f"use_yn='N' 입니다."
+            f"trendtracker.t_di_config_v1 에서 "
+            f"tnt_id='{config.DI_TNT_ID}' project_id='{config.DI_PROJECT_ID}' "
+            f"di_server_ip='{config.DI_SERVER_IP}' 에 해당하는 행을 찾을 수 없습니다."
         )
     return url
 

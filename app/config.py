@@ -40,20 +40,25 @@ TUNNEL_SSH_USER     = _env("TUNNEL_SSH_USER", "ubuntu")
 TUNNEL_SSH_KEY_PATH = _env("TUNNEL_SSH_KEY_PATH")
 TUNNEL_LOCAL_PORT   = _env_int("TUNNEL_LOCAL_PORT", 13307)
 
-# RDS — keyword-crawler 와 같은 DB에 접속
-RDS_HOST     = _env("RDS_HOST")
-RDS_PORT     = _env_int("RDS_PORT", 3306)
-RDS_USER     = _env("RDS_USER")
-RDS_PASSWORD = _env("RDS_PASSWORD")
-RDS_DB       = _env("RDS_DB")
+# RDS — keyword-crawler 와 같은 DB 서버에 접속
+# RDS_DB: t_article_url 이 있는 스키마 (keyword_crawler)
+# trendtracker.t_di_config_v1 은 TRENDTRACKER_DB 스키마 prefix 로 접근
+RDS_HOST          = _env("RDS_HOST")
+RDS_PORT          = _env_int("RDS_PORT", 3306)
+RDS_USER          = _env("RDS_USER")
+RDS_PASSWORD      = _env("RDS_PASSWORD")
+RDS_DB            = _env("RDS_DB")
+TRENDTRACKER_DB   = _env("TRENDTRACKER_DB", "trendtracker")
 
 # Worker
 WORKER_ID = _env("WORKER_ID", "rescrape-1")
 
-# Solr — 재수집 대상을 조회할 Solr 코어
-# solr_url 은 .env 에 직접 두지 않고 t_crawl_runtime 테이블에서 조회한다.
-SOLR_RUNTIME_NAME   = _env("SOLR_RUNTIME_NAME", "")  # t_crawl_runtime.runtime_name
-HTTP_VERIFY_SSL     = _env_bool("HTTP_VERIFY_SSL", True)
+# Solr — 접속 정보는 trendtracker.t_di_config_v1 에서 조회
+# WHERE tnt_id = DI_TNT_ID AND project_id = DI_PROJECT_ID AND di_server_ip = DI_SERVER_IP
+DI_TNT_ID       = _env("DI_TNT_ID", "")
+DI_PROJECT_ID   = _env("DI_PROJECT_ID", "")
+DI_SERVER_IP    = _env("DI_SERVER_IP", "")
+HTTP_VERIFY_SSL = _env_bool("HTTP_VERIFY_SSL", True)
 
 # Solr 조회 조건
 SOLR_RESCRAPE_QUERY        = _env("SOLR_RESCRAPE_QUERY", "*:*")
@@ -81,7 +86,8 @@ HEARTBEAT_INTERVAL_SECONDS = _env_int("HEARTBEAT_INTERVAL_SECONDS", 60)
 # 시작 시 검증
 # ---------------------------------------------------------------------------
 
-_REQUIRED_ALWAYS = ["RDS_HOST", "RDS_USER", "RDS_PASSWORD", "RDS_DB", "SOLR_RUNTIME_NAME"]
+_REQUIRED_ALWAYS = ["RDS_HOST", "RDS_USER", "RDS_PASSWORD", "RDS_DB",
+                    "DI_TNT_ID", "DI_PROJECT_ID", "DI_SERVER_IP"]
 _REQUIRED_TUNNEL = ["TUNNEL_SSH_HOST", "TUNNEL_SSH_KEY_PATH"]
 
 
