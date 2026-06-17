@@ -5,7 +5,7 @@ DB 연결 확인 스크립트.
   python scripts/check_db.py
 
 확인 항목:
-  1. keyword_crawler 스키마 접속 (t_article_url 행 수)
+  1. crawlerdb 스키마 접속 (t_article_url 행 수)
   2. trendtracker 스키마 접속 (t_di_config_v1 행 수)
 """
 

@@ -38,7 +38,7 @@ RDS_HOST=
 RDS_PORT=3306
 RDS_USER=
 RDS_PASSWORD=
-RDS_DB=keyword_crawler
+RDS_DB=crawlerdb
 
 # SSH 터널 (로컬에서 RDS 직접 접근 시)
 TUNNEL_ENABLED=true

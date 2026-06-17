@@ -41,7 +41,7 @@ TUNNEL_SSH_KEY_PATH = _env("TUNNEL_SSH_KEY_PATH")
 TUNNEL_LOCAL_PORT   = _env_int("TUNNEL_LOCAL_PORT", 13307)
 
 # RDS — keyword-crawler 와 같은 DB 서버에 접속
-# RDS_DB: t_article_url 이 있는 스키마 (keyword_crawler)
+# RDS_DB: t_article_url 이 있는 스키마 (crawlerdb)
 # trendtracker.t_di_config_v1 은 TRENDTRACKER_DB 스키마 prefix 로 접근
 RDS_HOST          = _env("RDS_HOST")
 RDS_PORT          = _env_int("RDS_PORT", 3306)
