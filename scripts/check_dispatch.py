@@ -77,13 +77,14 @@ def main() -> None:
     solr = SolrClient(di_config)
     print("Solr 조회 중...")
     try:
-        docs = solr.query_rescrape_candidates()
+        docs, time_range = solr.query_rescrape_candidates()
     except Exception as e:
         print(f"[오류] Solr 조회 실패: {e}")
         sys.exit(1)
     finally:
         solr.close()
 
+    print(f"조회 범위     : {time_range}")
     print(f"조회된 URL 수: {len(docs)}건")
     print()
 

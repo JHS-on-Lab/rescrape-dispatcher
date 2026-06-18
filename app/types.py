@@ -20,7 +20,7 @@ class DiConfig:
 @dataclass
 class SolrDocument:
     """Solr 에서 조회된 문서 한 건."""
-    id: str           # url_hash (Solr 문서 id)
+    id: str           # crawl_id (lookup3ycs64 기반 16자 hex)
     url: str
     source_type: str
 
