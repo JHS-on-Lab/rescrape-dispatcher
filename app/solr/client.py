@@ -16,7 +16,7 @@ Solr cursor 기반 페이지네이션:
   tstamp:[NOW-{N}MINUTES TO NOW]   — 슬라이딩 윈도우 (default_timeperiod)
   {filter_query}                   — t_di_config_v1.filter_query (설정 시)
 
-q 파라미터: t_di_config_v1.custrom_query (미설정 시 *:*)
+q 파라미터: 환경변수 SOLR_QUERY (미설정 시 *:*)
 
 조회 필드:
   id  — 문서 id
