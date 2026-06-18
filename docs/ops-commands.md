@@ -5,8 +5,8 @@
 ```
 rescrape-dispatcher              keyword-crawler
 ────────────────────             ─────────────────────────────────
-Solr 에서 신규 URL 조회           t_article_url 에서 URL 꺼내
-  → t_article_url 에               → 본문 페이지 HTTP 요청
+Solr 에서 신규 URL 조회           t_crawl_url 에서 URL 꺼내
+  → t_crawl_url 에               → 본문 페이지 HTTP 요청
     INSERT IGNORE                    → 제목·본문 파싱
     (신규만, 기존 skip)               → Solr 저장
 ```
@@ -186,21 +186,21 @@ services:
 ```sql
 -- rescrape-dispatcher 가 투입한 URL 현황 (priority=5)
 SELECT status, COUNT(*) AS cnt
-FROM t_article_url
+FROM t_crawl_url
 WHERE priority = 5
 GROUP BY status
 ORDER BY cnt DESC;
 
 -- 오늘 신규 투입된 URL 수
 SELECT portal_type, COUNT(*) AS cnt
-FROM t_article_url
+FROM t_crawl_url
 WHERE priority = 5
   AND created_at >= CURDATE()
 GROUP BY portal_type;
 
 -- 투입 후 처리 완료된 URL 수 (오늘)
 SELECT portal_type, COUNT(*) AS cnt
-FROM t_article_url
+FROM t_crawl_url
 WHERE priority = 5
   AND status = 'stored'
   AND updated_at >= CURDATE()
@@ -229,7 +229,7 @@ grep "cycle_done" logs/rescrape-rescrape-1.log | tail -5
 | 항목 | 의미 |
 |---|---|
 | `fetched` | Solr 에서 가져온 문서 수 |
-| `inserted` | t_article_url 에 실제 삽입된 신규 URL 수 |
+| `inserted` | t_crawl_url 에 실제 삽입된 신규 URL 수 |
 | `skipped` | 이미 존재해 INSERT IGNORE 로 skip 된 URL 수 |
 
 `skipped > 0` 은 정상 동작이다 — 슬라이딩 윈도우의 겹침 구간 문서가 skip 된 것.

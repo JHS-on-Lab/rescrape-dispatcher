@@ -7,21 +7,21 @@
 
 ## 1. 개요
 
-Solr 에 새로 수집된 기사 중 **특정 URL 패턴을 가진 신규 문서**를 주기적으로 조회해,
-`keyword-crawler` 가 사용하는 `t_article_url` 테이블에 투입하는 서비스다.
+Solr 에 새로 수집된 콘텐츠 중 **특정 URL 패턴을 가진 신규 문서**를 주기적으로 조회해,
+`keyword-crawler` 가 사용하는 `t_crawl_url` 테이블에 투입하는 서비스다.
 
 - **입력**: Solr DB (keyword-crawler 의 결과 저장소)
-- **출력**: MySQL `t_article_url` 테이블 (keyword-crawler 와 공유)
-- **이후 처리**: keyword-crawler 의 extraction worker 가 `t_article_url` 에서 URL 을 꺼내 본문을 추출한다.
+- **출력**: MySQL `t_crawl_url` 테이블 (keyword-crawler 와 공유)
+- **이후 처리**: keyword-crawler 의 extraction worker 가 `t_crawl_url` 에서 URL 을 꺼내 본문을 추출한다.
 
 ### 1.1 keyword-crawler 와의 관계
 
 ```
 [keyword-crawler]                     [rescrape-dispatcher]
   Discovery worker                        SolrClient
-    → t_article_url (discovered)              Solr 신규 문서 조회
+    → t_crawl_url (discovered)              Solr 신규 문서 조회
   Extraction worker                           ↓
-    → 본문 추출                           t_article_url INSERT IGNORE
+    → 본문 추출                           t_crawl_url INSERT IGNORE
     → Solr 저장                          (신규 URL 만 삽입)
                                               ↓
                                         [keyword-crawler]
@@ -30,7 +30,7 @@ Solr 에 새로 수집된 기사 중 **특정 URL 패턴을 가진 신규 문서
 ```
 
 **이 프로젝트는 keyword-crawler 코드를 수정하거나 공유하지 않는다.**
-두 프로젝트는 **동일한 MySQL DB** (`t_article_url`)를 통해서만 소통한다.
+두 프로젝트는 **동일한 MySQL DB** (`t_crawl_url`)를 통해서만 소통한다.
 
 ---
 
@@ -43,12 +43,12 @@ Solr 에 새로 수집된 기사 중 **특정 URL 패턴을 가진 신규 문서
   Solr ────────► │  SolrClient.query_rescrape()     │
                  │    슬라이딩 윈도우 조회           │
                  │          ↓                       │
-                 │  ArticleUrlRepo.bulk_insert_new() │
+                 │  CrawlUrlRepo.bulk_insert_new() │
                  │      INSERT IGNORE               │
                  └────────────────┬────────────────┘
                                   │ INSERT (신규만)
                                   ▼
-                         t_article_url (MySQL)
+                         t_crawl_url (MySQL)
                                   │
                                   ▼ (keyword-crawler 이 읽음)
                          Extraction worker
@@ -66,7 +66,7 @@ Solr 에 새로 수집된 기사 중 **특정 URL 패턴을 가진 신규 문서
       조건: collected_at:[NOW-{WINDOW}MINUTES TO NOW]
             + SOLR_RESCRAPE_URL_CONTAINS (설정 시)
       최대: SOLR_RESCRAPE_MAX_DOCS 건
-   b. ArticleUrlRepo.bulk_insert_new()
+   b. CrawlUrlRepo.bulk_insert_new()
       - 신규 URL → status=discovered 로 INSERT
       - 이미 존재하는 URL → 변경 없음 (INSERT IGNORE)
    c. 결과 로그 기록 (fetched / inserted / skipped)
@@ -172,7 +172,7 @@ Solr 에서 가져오는 필드: `id`, `url`, `portal_type`
 
 ## 6. DB 연동
 
-### 6.1 t_article_url 투입 규칙
+### 6.1 t_crawl_url 투입 규칙
 
 `url_hash` UNIQUE 제약 기준 INSERT IGNORE.
 
@@ -191,7 +191,7 @@ extraction worker 가 이 URL 을 먼저 처리한다.
 
 ### 6.3 url_hash 일치 보장
 
-keyword-crawler 와 동일한 URL 정규화 로직을 `article_url_repo.py` 에 복제 적용한다.
+keyword-crawler 와 동일한 URL 정규화 로직을 `crawl_url_repo.py` 에 복제 적용한다.
 
 정규화 규칙: http→https, 호스트 소문자, 추적 파라미터 제거, 끝 슬래시 제거, 기본 포트 제거, 프래그먼트 제거.
 
@@ -216,7 +216,7 @@ app/
 
   repository/
     db.py                # SSH 터널(옵션) + SQLAlchemy 엔진 context manager
-    article_url_repo.py  # t_article_url bulk_insert_new()
+    crawl_url_repo.py  # t_crawl_url bulk_insert_new()
 
   solr/
     client.py            # SolrClient — 슬라이딩 윈도우 + cursor 페이지네이션
@@ -235,7 +235,7 @@ app/
 | `RDS_PORT` | `3306` | MySQL 포트 |
 | `RDS_USER` | (필수) | MySQL 사용자 |
 | `RDS_PASSWORD` | (필수) | MySQL 비밀번호 |
-| `RDS_CRAWLER_DB` | (필수) | INSERT 대상 스키마 (t_article_url) |
+| `RDS_CRAWLER_DB` | (필수) | INSERT 대상 스키마 (t_crawl_url) |
 | `RDS_TRENDTRACKER_DB` | `trendtracker` | SELECT 대상 스키마 (t_di_config_v1) |
 | `TUNNEL_ENABLED` | `false` | SSH 터널 사용 여부 |
 | `TUNNEL_SSH_HOST` | — | SSH 서버 호스트 |
@@ -347,7 +347,7 @@ services:
 | 항목 | 의미 |
 |---|---|
 | `fetched` | Solr 에서 가져온 문서 수 |
-| `inserted` | t_article_url 에 실제 삽입된 신규 URL 수 |
+| `inserted` | t_crawl_url 에 실제 삽입된 신규 URL 수 |
 | `skipped` | 이미 존재해 INSERT IGNORE 로 skip 된 URL 수 (`fetched - inserted`) |
 
 `skipped > 0` 은 정상 동작이다 — 윈도우 내 중복 조회 구간의 문서가 skip 된 것.
@@ -360,7 +360,7 @@ services:
 |---|---|---|
 | 역할 | URL 발견 + 본문 추출 | 신규 URL 투입만 |
 | 입력 | 포털 검색 결과 (스크래핑) | Solr (HTTP JSON API) |
-| 출력 | t_article_url + Solr | t_article_url 만 |
+| 출력 | t_crawl_url + Solr | t_crawl_url 만 |
 | 베이스 이미지 | playwright/python | python:3.12-slim |
 | 의존성 | Playwright, trafilatura, lxml 등 | SQLAlchemy, httpx 만 |
 | 스케줄링 | DB 기반 키워드 스케줄 | 단순 time.sleep 루프 |
@@ -372,5 +372,5 @@ services:
 
 - 본문 추출 로직 — keyword-crawler 가 처리
 - Solr 스키마 변경 — keyword-crawler 프로젝트에서 관리
-- t_article_url 스키마 변경 — keyword-crawler alembic 마이그레이션으로 관리
+- t_crawl_url 스키마 변경 — keyword-crawler alembic 마이그레이션으로 관리
 - 기존 URL 재추출 (stored → discovered 리셋) — 이 프로젝트의 범위 밖
