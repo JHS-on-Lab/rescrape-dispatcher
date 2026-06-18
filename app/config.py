@@ -45,7 +45,7 @@ RDS_HOST             = _env("RDS_HOST")
 RDS_PORT             = _env_int("RDS_PORT", 3306)
 RDS_USER             = _env("RDS_USER")
 RDS_PASSWORD         = _env("RDS_PASSWORD")
-RDS_CRAWLER_DB       = _env("RDS_CRAWLER_DB")       # INSERT 대상 (t_article_url)
+RDS_CRAWLER_DB       = _env("RDS_CRAWLER_DB")       # INSERT 대상 (t_crawl_url)
 RDS_TRENDTRACKER_DB  = _env("RDS_TRENDTRACKER_DB", "trendtracker")  # SELECT 대상 (t_di_config_v1)
 
 # Worker

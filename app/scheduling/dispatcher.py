@@ -1,9 +1,9 @@
 """
-디스패처: Solr 에서 신규 URL 을 조회해 t_article_url 에 투입한다.
+디스패처: Solr 에서 신규 URL 을 조회해 t_crawl_url 에 투입한다.
 
 슬라이딩 윈도우 방식으로 동작한다:
   매 사이클마다 tstamp 기준 최근 SLIDING_WINDOW_MINUTES 분 이내 문서를 조회해
-  t_article_url 에 INSERT IGNORE 로 신규 URL 만 삽입한다.
+  t_crawl_url 에 INSERT IGNORE 로 신규 URL 만 삽입한다.
   이미 존재하는 URL 은 skip 된다.
 
   상태 저장 없음. 파일도 테이블도 필요 없다.
@@ -20,7 +20,7 @@ from app import config
 from app.repository.di_config_repo import DiConfigRepo
 from app.types import DiConfig, DispatchStats
 from app.repository.db import db_context
-from app.repository.article_url_repo import ArticleUrlRepo
+from app.repository.crawl_url_repo import CrawlUrlRepo
 from app.solr.client import SolrClient
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ def run_dispatch_loop(worker_id: str) -> None:
             extra={"phase": "startup", "worker_id": worker_id},
         )
         solr = SolrClient(di_config)
-        url_repo = ArticleUrlRepo(engine)
+        url_repo = CrawlUrlRepo(engine)
 
         try:
             while True:
@@ -94,7 +94,7 @@ def run_dispatch_loop(worker_id: str) -> None:
 
 
 def _run_one_cycle(
-    url_repo: ArticleUrlRepo,
+    url_repo: CrawlUrlRepo,
     solr: SolrClient,
     worker_id: str,
 ) -> DispatchStats:

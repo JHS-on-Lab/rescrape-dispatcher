@@ -2,7 +2,7 @@
 DB 연결 관리: SSH 터널(선택) + SQLAlchemy 엔진.
 
 keyword-crawler 와 같은 RDS 에 접속한다.
-t_article_url 테이블에 쓰기만 하므로 읽기는 필요 없다.
+t_crawl_url 테이블에 쓰기만 하므로 읽기는 필요 없다.
 
 사용법:
     with db_context() as engine:

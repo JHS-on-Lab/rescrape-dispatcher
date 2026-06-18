@@ -4,7 +4,7 @@
 실행:
   python scripts/run_once.py
 
-Solr 조회 → t_article_url INSERT 를 1회 수행하고 종료한다.
+Solr 조회 → t_crawl_url INSERT 를 1회 수행하고 종료한다.
 워커 전체 루프 없이 단건 테스트용으로 사용한다.
 """
 
@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import config
 from app.repository.db import db_context
-from app.repository.article_url_repo import ArticleUrlRepo
+from app.repository.crawl_url_repo import CrawlUrlRepo
 from app.repository.di_config_repo import DiConfigRepo
 from app.solr.client import SolrClient
 from app.types import DiConfig
@@ -72,8 +72,8 @@ def main() -> None:
             print("INSERT 대상 없음.")
             return
 
-        print("t_article_url INSERT 중...")
-        total, inserted = ArticleUrlRepo(engine).bulk_insert_new(
+        print("t_crawl_url INSERT 중...")
+        total, inserted = CrawlUrlRepo(engine).bulk_insert_new(
             docs, priority=config.RESCRAPE_PRIORITY
         )
         skipped = total - inserted

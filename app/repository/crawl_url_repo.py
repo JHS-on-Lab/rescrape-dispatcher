@@ -1,7 +1,7 @@
 """
-article_url 테이블 쓰기 접근 — 신규 URL 투입 전용.
+crawl_url 테이블 쓰기 접근 — 신규 URL 투입 전용.
 
-keyword-crawler 의 t_article_url 테이블에 Solr 에서 조회한 신규 URL 을 삽입한다.
+keyword-crawler 의 t_crawl_url 테이블에 Solr 에서 조회한 신규 URL 을 삽입한다.
 이미 존재하는 URL 은 INSERT IGNORE 로 건드리지 않는다.
 본 모듈은 INSERT 만 담당하며, 추출 워커가 이 데이터를 처리한다.
 
@@ -52,7 +52,7 @@ def _url_hash(normalized_url: str) -> str:
 
 
 _INSERT_SQL = text("""
-    INSERT IGNORE INTO t_article_url
+    INSERT IGNORE INTO t_crawl_url
         (url, url_hash, host, source_type, status,
          attempt_count, is_manual, priority,
          collected_date, created_at, updated_at)
@@ -63,7 +63,7 @@ _INSERT_SQL = text("""
 """)
 
 
-class ArticleUrlRepo:
+class CrawlUrlRepo:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
@@ -73,7 +73,7 @@ class ArticleUrlRepo:
         priority: int,
     ) -> tuple[int, int]:
         """
-        Solr 문서 목록을 t_article_url 에 신규 투입한다.
+        Solr 문서 목록을 t_crawl_url 에 신규 투입한다.
         이미 존재하는 URL 은 INSERT IGNORE 로 skip 된다.
 
         반환: (total_docs, inserted)
