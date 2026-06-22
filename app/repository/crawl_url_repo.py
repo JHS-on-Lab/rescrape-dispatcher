@@ -43,6 +43,11 @@ def _normalize(url: str) -> str:
         netloc = netloc.rsplit(":", 1)[0]
     path = parsed.path.rstrip("/") or "/"
     qs = [(k, v) for k, v in parse_qsl(parsed.query) if not _STRIP_PARAMS.match(k)]
+
+    # v.daum.net ?f=o → 언론사 원본으로 리다이렉트됨 → v.daum.net 도메인룰 미적용 방지
+    if netloc == "v.daum.net":
+        qs = [(k, v) for k, v in qs if k != "f"]
+
     query = urlencode(sorted(qs))
     return urlunparse((scheme, netloc, path, "", query, ""))
 
