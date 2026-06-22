@@ -16,44 +16,27 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app import config
 from app.repository.db import db_context
 from app.repository.crawl_url_repo import CrawlUrlRepo
-from app.repository.di_config_repo import DiConfigRepo
-from app.solr.client import SolrClient
-from app.types import DiConfig
-
-
-def _resolve_di_config(engine) -> DiConfig:
-    if config.SOLR_DIRECT_ENABLED:
-        if not config.SOLR_URL:
-            print("[오류] SOLR_DIRECT_ENABLED=true 이지만 SOLR_URL 이 설정되지 않았습니다.")
-            sys.exit(1)
-        print("[모드] 직접 접속 (SOLR_DIRECT_ENABLED=true)")
-        return DiConfig(
-            solr_url=config.SOLR_URL,
-            query=config.SOLR_QUERY,
-            filter_query=config.SOLR_FILTER_QUERY,
-            timeperiod=config.SLIDING_WINDOW_MINUTES,
-            max_result_cnt=config.SOLR_MAX_DOCS,
-        )
-
-    print(
-        f"[모드] DB 조회 "
-        f"(tnt_id={config.DI_TNT_ID} project_id={config.DI_PROJECT_ID} di_server_ip={config.DI_SERVER_IP})"
-    )
-    di_config = DiConfigRepo(engine).get_config()
-    if not di_config:
-        print("[오류] t_di_config_v1 에서 조건에 맞는 행이 없거나 use_yn='N' 입니다.")
-        sys.exit(1)
-    return di_config
+from app.scheduling.dispatcher import resolve_di_config
 
 
 def main() -> None:
-    with db_context() as engine:
-        di_config = _resolve_di_config(engine)
+    config.validate()
 
+    with db_context() as engine:
+        try:
+            di_config = resolve_di_config(engine)
+        except RuntimeError as e:
+            print(f"[오류] {e}")
+            sys.exit(1)
+
+        mode = "직접 접속" if config.SOLR_DIRECT_ENABLED else "DB 조회"
+        print(f"[모드] {mode}")
         print(f"Solr URL     : {di_config.solr_url}")
         print(f"filter_query : {di_config.filter_query or '(없음)'}")
         print(f"window       : {di_config.timeperiod}분")
         print()
+
+        from app.solr.client import SolrClient
 
         solr = SolrClient(di_config)
         print("Solr 조회 중...")

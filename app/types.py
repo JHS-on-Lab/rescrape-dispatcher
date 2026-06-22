@@ -11,10 +11,10 @@ from dataclasses import dataclass
 class DiConfig:
     """trendtracker.t_di_config_v1 에서 조회한 Solr 접속·쿼리 설정."""
     solr_url:       str
-    query:          str   # custrom_query (Solr q 파라미터)
-    filter_query:   str   # filter_query  (Solr fq 파라미터)
-    timeperiod:     int   # default_timeperiod — 슬라이딩 윈도우 크기(분)
-    max_result_cnt: int   # solr_max_result_cnt
+    query:          str        # custrom_query (Solr q 파라미터)
+    filter_query:   str | None # filter_query  (Solr fq 파라미터). 미설정 시 None
+    timeperiod:     int        # default_timeperiod — 슬라이딩 윈도우 크기(분)
+    max_result_cnt: int        # solr_max_result_cnt
 
 
 @dataclass

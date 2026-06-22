@@ -20,50 +20,33 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import config
-from app.types import DiConfig
-
-
-def _resolve_di_config() -> DiConfig:
-    if config.SOLR_DIRECT_ENABLED:
-        if not config.SOLR_URL:
-            print("[오류] SOLR_DIRECT_ENABLED=true 이지만 SOLR_URL 이 설정되지 않았습니다.")
-            sys.exit(1)
-        print("[모드] 직접 접속 (SOLR_DIRECT_ENABLED=true)")
-        return DiConfig(
-            solr_url=config.SOLR_URL,
-            query=config.SOLR_QUERY,
-            filter_query=config.SOLR_FILTER_QUERY,
-            timeperiod=config.SLIDING_WINDOW_MINUTES,
-            max_result_cnt=config.SOLR_MAX_DOCS,
-        )
-
-    if not (config.DI_TNT_ID and config.DI_PROJECT_ID and config.DI_SERVER_IP):
-        print("[오류] DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP 를 .env 에 설정하세요.")
-        sys.exit(1)
-
-    print(
-        f"[모드] DB 조회 "
-        f"(tnt_id={config.DI_TNT_ID} project_id={config.DI_PROJECT_ID} di_server_ip={config.DI_SERVER_IP})"
-    )
-    from app.repository.db import db_context
-    from app.repository.di_config_repo import DiConfigRepo
-
-    with db_context() as engine:
-        di_config = DiConfigRepo(engine).get_config()
-
-    if not di_config:
-        print("[오류] t_di_config_v1 에서 조건에 맞는 행이 없거나 use_yn='N' 입니다.")
-        sys.exit(1)
-
-    return di_config
+from app.scheduling.dispatcher import resolve_di_config
 
 
 def main() -> None:
+    config.validate()
+
     parser = argparse.ArgumentParser(description="Dispatch dry-run")
     parser.add_argument("--limit", type=int, default=20, help="출력할 최대 URL 수 (기본 20)")
     args = parser.parse_args()
 
-    di_config = _resolve_di_config()
+    try:
+        if config.SOLR_DIRECT_ENABLED:
+            print("[모드] 직접 접속 (SOLR_DIRECT_ENABLED=true)")
+            di_config = resolve_di_config()
+        else:
+            print(
+                f"[모드] DB 조회 "
+                f"(tnt_id={config.DI_TNT_ID} project_id={config.DI_PROJECT_ID}"
+                f" di_server_ip={config.DI_SERVER_IP})"
+            )
+            from app.repository.db import db_context
+            with db_context() as engine:
+                di_config = resolve_di_config(engine)
+    except RuntimeError as e:
+        print(f"[오류] {e}")
+        sys.exit(1)
+
     print()
     print(f"Solr URL      : {di_config.solr_url}")
     print(f"q             : {di_config.query}")

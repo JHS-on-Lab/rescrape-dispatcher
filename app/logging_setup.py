@@ -82,11 +82,6 @@ _FMT = (
     "worker=%(worker_id)s phase=%(phase)s "
     "%(message)s"
 )
-_ERR_FMT = (
-    "%(asctime)s %(levelname)-5s [%(component)s] "
-    "worker=%(worker_id)s phase=%(phase)s "
-    "%(message)s"
-)
 _DATE_FMT = "%Y-%m-%dT%H:%M:%SZ"
 
 
@@ -122,7 +117,7 @@ def _configure_root(log_dir: Path, log_name: str = "rescrape") -> None:
 
     err_handler = _make_rotating_handler(log_dir / f"{log_name}-error.log", logging.WARNING)
     err_handler.addFilter(ctx)
-    err_handler.setFormatter(logging.Formatter(_ERR_FMT, datefmt=_DATE_FMT))
+    err_handler.setFormatter(logging.Formatter(_FMT, datefmt=_DATE_FMT))
     root.addHandler(err_handler)
 
     console = logging.StreamHandler()

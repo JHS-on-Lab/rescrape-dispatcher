@@ -55,7 +55,7 @@ def run_dispatch_loop(worker_id: str) -> None:
     cycle = 0
 
     with db_context() as engine:
-        di_config = _resolve_di_config(engine)
+        di_config = resolve_di_config(engine)
         logger.info(
             f"solr: url='{di_config.solr_url}' "
             f"q='{di_config.query}' "
@@ -148,13 +148,16 @@ def _run_one_cycle(
     )
 
 
-def _resolve_di_config(engine) -> DiConfig:
-    """직접 모드(SOLR_DIRECT_ENABLED) 또는 DB 조회 모드로 Solr 설정을 반환한다."""
+def resolve_di_config(engine=None) -> DiConfig:
+    """직접 모드(SOLR_DIRECT_ENABLED) 또는 DB 조회 모드로 Solr 설정을 반환한다.
+
+    직접 모드에서는 engine 불필요. DB 조회 모드에서는 engine 필수.
+    """
     if config.SOLR_DIRECT_ENABLED:
         return DiConfig(
             solr_url=config.SOLR_URL,
             query=config.SOLR_QUERY,
-            filter_query=config.SOLR_FILTER_QUERY,
+            filter_query=config.SOLR_FILTER_QUERY or None,
             timeperiod=config.SLIDING_WINDOW_MINUTES,
             max_result_cnt=config.SOLR_MAX_DOCS,
         )

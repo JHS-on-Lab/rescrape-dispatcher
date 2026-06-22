@@ -47,7 +47,7 @@ class DiConfigRepo:
         return DiConfig(
             solr_url       = (row[0] or "").strip(),
             query          = config.SOLR_QUERY,
-            filter_query   = (row[1] or "").strip(),
+            filter_query   = (row[1] or "").strip() or None,
             timeperiod     = config.SLIDING_WINDOW_MINUTES,
             max_result_cnt = config.SOLR_MAX_DOCS,
         )
