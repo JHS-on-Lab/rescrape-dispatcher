@@ -28,42 +28,8 @@ from datetime import datetime, timezone, timedelta
 import httpx
 
 from app import config
-from app.types import DiConfig
-
-
-def _resolve_di_config() -> DiConfig:
-    if config.SOLR_DIRECT_ENABLED:
-        if not config.SOLR_URL:
-            print("[오류] SOLR_DIRECT_ENABLED=true 이지만 SOLR_URL 이 설정되지 않았습니다.")
-            sys.exit(1)
-        print("[모드] 직접 접속 (SOLR_DIRECT_ENABLED=true)")
-        return DiConfig(
-            solr_url=config.SOLR_URL,
-            query=config.SOLR_QUERY,
-            filter_query=config.SOLR_FILTER_QUERY,
-            timeperiod=config.SLIDING_WINDOW_MINUTES,
-            max_result_cnt=config.SOLR_MAX_DOCS,
-        )
-
-    if not (config.DI_TNT_ID and config.DI_PROJECT_ID and config.DI_SERVER_IP):
-        print("[오류] DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP 를 .env 에 설정하세요.")
-        sys.exit(1)
-
-    print(
-        f"[모드] DB 조회 "
-        f"(tnt_id={config.DI_TNT_ID} project_id={config.DI_PROJECT_ID} di_server_ip={config.DI_SERVER_IP})"
-    )
-    from app.repository.db import db_context
-    from app.repository.di_config_repo import DiConfigRepo
-
-    with db_context() as engine:
-        di_config = DiConfigRepo(engine).get_config()
-
-    if not di_config:
-        print("[오류] t_di_config_v1 에서 조건에 맞는 행이 없거나 use_yn='N' 입니다.")
-        sys.exit(1)
-
-    return di_config
+from app.repository.db import db_context
+from app.scheduling.dispatcher import resolve_di_config
 
 
 def main() -> None:
@@ -71,7 +37,21 @@ def main() -> None:
     parser.add_argument("--no-window", action="store_true", help="tstamp 슬라이딩 윈도우 필터 제외 (전체 기간 조회)")
     args = parser.parse_args()
 
-    di_config = _resolve_di_config()
+    try:
+        if config.SOLR_DIRECT_ENABLED:
+            print("[모드] 직접 접속 (SOLR_DIRECT_ENABLED=true)")
+            di_config = resolve_di_config()
+        else:
+            print(
+                f"[모드] DB 조회 "
+                f"(tnt_id={config.DI_TNT_ID} project_id={config.DI_PROJECT_ID}"
+                f" di_server_ip={config.DI_SERVER_IP})"
+            )
+            with db_context() as engine:
+                di_config = resolve_di_config(engine)
+    except RuntimeError as e:
+        print(f"[오류] {e}")
+        sys.exit(1)
 
     solr_url = di_config.solr_url.rstrip("/")
     print(f"Solr URL     : {solr_url}")
@@ -80,12 +60,12 @@ def main() -> None:
 
     fq = []
     if args.no_window:
-        print(f"window       : 미적용 (--no-window)")
+        print("window       : 미적용 (--no-window)")
     else:
         now_utc   = datetime.now(timezone.utc)
         start_utc = now_utc - timedelta(minutes=di_config.timeperiod)
-        ts_now   = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-        ts_start = start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts_now    = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+        ts_start  = start_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
         fq.append(f"tstamp:[{ts_start} TO {ts_now}]")
         print(f"window       : {di_config.timeperiod}분 ({ts_start} ~ {ts_now})")
     if di_config.filter_query:
