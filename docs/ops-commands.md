@@ -192,19 +192,19 @@ GROUP BY status
 ORDER BY cnt DESC;
 
 -- 오늘 신규 투입된 URL 수
-SELECT portal_type, COUNT(*) AS cnt
+SELECT source_type, COUNT(*) AS cnt
 FROM t_crawl_url
 WHERE priority = 5
   AND created_at >= CURDATE()
-GROUP BY portal_type;
+GROUP BY source_type;
 
 -- 투입 후 처리 완료된 URL 수 (오늘)
-SELECT portal_type, COUNT(*) AS cnt
+SELECT source_type, COUNT(*) AS cnt
 FROM t_crawl_url
 WHERE priority = 5
   AND status = 'stored'
   AND updated_at >= CURDATE()
-GROUP BY portal_type;
+GROUP BY source_type;
 ```
 
 ---

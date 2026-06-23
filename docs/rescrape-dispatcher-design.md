@@ -122,16 +122,16 @@ Docker 볼륨 마운트 불필요.
 ### 5.1 커서 기반 페이지네이션
 
 ```
-GET /select?q={query}&fl=id,url,portal_type
-           &fq=collected_at:[NOW-{N}MINUTES TO NOW]
-           &fq=url:*{pattern}*              (설정 시)
-           &rows=100&sort=collected_at+asc,id+asc
+GET /select?q={query}&fl=id,url
+           &fq=tstamp:[{ts_start} TO {ts_now}]
+           &fq={filter_query}               (t_di_config_v1.filter_query 설정 시)
+           &rows=100&sort=tstamp+asc,id+asc
            &cursorMark=*&wt=json
 → 응답에서 nextCursorMark 를 꺼내 다음 요청에 사용
 → nextCursorMark == 이전 cursorMark 이면 결과 소진 → 종료
 ```
 
-**sort 에 `collected_at asc` 필수**: 슬라이딩 윈도우는 시간 기반이므로
+**sort 에 `tstamp asc` 필수**: 슬라이딩 윈도우는 시간 기반이므로
 `id asc` 단독 정렬은 윈도우 내 문서를 시간 순서대로 처리하지 않는다.
 cursorMark 의 안정성을 위해 `id asc` 를 두 번째 정렬 키로 함께 지정한다.
 
@@ -166,7 +166,10 @@ SOLR_RESCRAPE_URL_CONTAINS=naver.com,daum.net
 
 ### 5.3 조회 필드
 
-Solr 에서 가져오는 필드: `id`, `url`, `portal_type`
+Solr 에서 가져오는 필드: `id`, `url`
+
+`source_type` 은 Solr 스키마에 없으므로 조회하지 않고
+`SOLR_RESCRAPE_SOURCE_TYPE`(`"SOLR_RESCRAPE"`) 상수로 고정해 t_crawl_url 에 삽입한다.
 
 ---
 
@@ -364,7 +367,7 @@ services:
 | 베이스 이미지 | playwright/python | python:3.12-slim |
 | 의존성 | Playwright, trafilatura, lxml 등 | SQLAlchemy, httpx 만 |
 | 스케줄링 | DB 기반 키워드 스케줄 | 단순 time.sleep 루프 |
-| Docker 볼륨 | 필요 (로그) | 불필요 |
+| Docker 볼륨 | 필요 (로그, 출력) | 필요 (로그) |
 
 ---
 
