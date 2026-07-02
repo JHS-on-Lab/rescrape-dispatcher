@@ -3,7 +3,7 @@
 ## 구조 이해
 
 ```
-rescrape-dispatcher              keyword-crawler
+rescrape-dispatcher              extraction-worker
 ────────────────────             ─────────────────────────────────
 Solr 에서 신규 URL 조회           t_crawl_url 에서 URL 꺼내
   → t_crawl_url 에               → 본문 페이지 HTTP 요청
@@ -11,7 +11,7 @@ Solr 에서 신규 URL 조회           t_crawl_url 에서 URL 꺼내
     (신규만, 기존 skip)               → Solr 저장
 ```
 
-rescrape-dispatcher 는 신규 URL 투입만 한다. 추출은 keyword-crawler 의 extraction worker 가 처리한다.
+rescrape-dispatcher 는 신규 URL 투입만 한다. 추출은 extraction-worker 가 처리한다.
 
 ---
 
@@ -33,7 +33,7 @@ python -m app --help
 ## 2. 환경변수 (.env)
 
 ```dotenv
-# DB 접속 (keyword-crawler 와 같은 RDS)
+# DB 접속 (discovery-worker / extraction-worker 와 같은 RDS)
 RDS_HOST=
 RDS_PORT=3306
 RDS_USER=
@@ -47,7 +47,7 @@ TUNNEL_SSH_USER=ubuntu
 TUNNEL_SSH_KEY_PATH=
 TUNNEL_LOCAL_PORT=13307
 
-# Solr — keyword-crawler 가 결과를 저장한 코어
+# Solr — extraction-worker 가 결과를 저장한 코어
 SOLR_URL=http://localhost:8983/solr/news
 HTTP_VERIFY_SSL=true
 
@@ -132,21 +132,21 @@ docker logs -f rescrape
 
 ---
 
-## 6. Docker Compose 예시 (keyword-crawler 와 함께)
+## 6. Docker Compose 예시 (discovery-worker / extraction-worker 와 함께)
 
 ```yaml
 services:
-  # keyword-crawler — 발견 워커
+  # discovery-worker — 발견 워커
   discover-naver-news:
-    image: keyword-crawler:latest
-    command: ["--role", "discovery", "--source", "naver_news"]
-    env_file: keyword-crawler/.env.prod
+    image: discovery-worker:latest
+    command: ["--source", "naver_news"]
+    env_file: discovery-worker/.env.prod
 
-  # keyword-crawler — 추출 워커
+  # extraction-worker — 추출 워커
   extraction:
-    image: keyword-crawler:latest
-    command: ["--role", "extraction"]
-    env_file: keyword-crawler/.env.prod
+    image: extraction-worker:latest
+    command: ["python", "-m", "app"]
+    env_file: extraction-worker/.env.prod
     deploy:
       replicas: 3
 

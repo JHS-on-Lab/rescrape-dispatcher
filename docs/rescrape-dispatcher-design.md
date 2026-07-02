@@ -8,28 +8,28 @@
 ## 1. 개요
 
 Solr 에 새로 수집된 콘텐츠 중 **특정 URL 패턴을 가진 신규 문서**를 주기적으로 조회해,
-`keyword-crawler` 가 사용하는 `t_crawl_url` 테이블에 투입하는 서비스다.
+`discovery-worker` / `extraction-worker` 가 사용하는 `t_crawl_url` 테이블에 투입하는 서비스다.
 
-- **입력**: Solr DB (keyword-crawler 의 결과 저장소)
-- **출력**: MySQL `t_crawl_url` 테이블 (keyword-crawler 와 공유)
-- **이후 처리**: keyword-crawler 의 extraction worker 가 `t_crawl_url` 에서 URL 을 꺼내 본문을 추출한다.
+- **입력**: Solr DB (extraction-worker 의 결과 저장소)
+- **출력**: MySQL `t_crawl_url` 테이블 (discovery-worker / extraction-worker 와 공유)
+- **이후 처리**: extraction-worker 가 `t_crawl_url` 에서 URL 을 꺼내 본문을 추출한다.
 
-### 1.1 keyword-crawler 와의 관계
+### 1.1 discovery-worker / extraction-worker 와의 관계
 
 ```
-[keyword-crawler]                     [rescrape-dispatcher]
+[discovery-worker]                    [rescrape-dispatcher]
   Discovery worker                        SolrClient
     → t_crawl_url (discovered)              Solr 신규 문서 조회
-  Extraction worker                           ↓
-    → 본문 추출                           t_crawl_url INSERT IGNORE
-    → Solr 저장                          (신규 URL 만 삽입)
-                                              ↓
-                                        [keyword-crawler]
+                                                ↓
+[extraction-worker]                     t_crawl_url INSERT IGNORE
+  Extraction worker                       (신규 URL 만 삽입)
+    → 본문 추출                                 ↓
+    → Solr 저장                         [extraction-worker]
                                           Extraction worker
                                             → 본문 추출 → Solr 업데이트
 ```
 
-**이 프로젝트는 keyword-crawler 코드를 수정하거나 공유하지 않는다.**
+**이 프로젝트는 discovery-worker / extraction-worker 코드를 수정하거나 공유하지 않는다.**
 두 프로젝트는 **동일한 MySQL DB** (`t_crawl_url`)를 통해서만 소통한다.
 
 ---
@@ -50,7 +50,7 @@ Solr 에 새로 수집된 콘텐츠 중 **특정 URL 패턴을 가진 신규 문
                                   ▼
                          t_crawl_url (MySQL)
                                   │
-                                  ▼ (keyword-crawler 이 읽음)
+                                  ▼ (extraction-worker 이 읽음)
                          Extraction worker
 ```
 
@@ -189,12 +189,12 @@ Solr 에서 가져오는 필드: `id`, `url`
 ### 6.2 우선순위
 
 투입 URL 에는 `RESCRAPE_PRIORITY`(기본: 5) 를 부여한다.
-keyword-crawler 발견자 삽입의 기본 priority(0) 보다 높아
-extraction worker 가 이 URL 을 먼저 처리한다.
+discovery-worker 발견자 삽입의 기본 priority(0) 보다 높아
+extraction-worker 가 이 URL 을 먼저 처리한다.
 
 ### 6.3 url_hash 일치 보장
 
-keyword-crawler 와 동일한 URL 정규화 로직을 `crawl_url_repo.py` 에 복제 적용한다.
+discovery-worker / extraction-worker 와 동일한 URL 정규화 로직을 `crawl_url_repo.py` 에 복제 적용한다.
 
 정규화 규칙: http→https, 호스트 소문자, 추적 파라미터 제거, 끝 슬래시 제거, 기본 포트 제거, 프래그먼트 제거.
 
@@ -267,7 +267,7 @@ app/
 
 ### 10.1 Docker 이미지
 
-keyword-crawler 와 달리 Playwright / 헤드리스 브라우저가 필요 없으므로
+discovery-worker / extraction-worker 와 달리 Playwright / 헤드리스 브라우저가 필요 없으므로
 `python:3.12-slim` 경량 이미지를 사용한다.
 
 ```bash
@@ -357,23 +357,23 @@ services:
 
 ---
 
-## 12. keyword-crawler 와의 차이점
+## 12. discovery-worker / extraction-worker 와의 차이점
 
-| 항목 | keyword-crawler | rescrape-dispatcher |
-|---|---|---|
-| 역할 | URL 발견 + 본문 추출 | 신규 URL 투입만 |
-| 입력 | 포털 검색 결과 (스크래핑) | Solr (HTTP JSON API) |
-| 출력 | t_crawl_url + Solr | t_crawl_url 만 |
-| 베이스 이미지 | playwright/python | python:3.12-slim |
-| 의존성 | Playwright, trafilatura, lxml 등 | SQLAlchemy, httpx 만 |
-| 스케줄링 | DB 기반 키워드 스케줄 | 단순 time.sleep 루프 |
-| Docker 볼륨 | 필요 (로그, 출력) | 필요 (로그) |
+| 항목 | discovery-worker | extraction-worker | rescrape-dispatcher |
+|---|---|---|---|
+| 역할 | URL 발견 | 본문 추출 | 신규 URL 투입만 |
+| 입력 | 포털 검색 결과 (스크래핑) | t_crawl_url | Solr (HTTP JSON API) |
+| 출력 | t_crawl_url | t_crawl_url + Solr | t_crawl_url 만 |
+| 베이스 이미지 | playwright/python | playwright/python | python:3.12-slim |
+| 의존성 | httpx, undetected-chromedriver 등 | Playwright, trafilatura, lxml 등 | SQLAlchemy, httpx 만 |
+| 스케줄링 | DB 기반 키워드 스케줄 | DB 기반 URL 큐 | 단순 time.sleep 루프 |
+| Docker 볼륨 | 필요 (로그) | 필요 (로그, 출력) | 필요 (로그) |
 
 ---
 
 ## 13. 범위 밖
 
-- 본문 추출 로직 — keyword-crawler 가 처리
-- Solr 스키마 변경 — keyword-crawler 프로젝트에서 관리
-- t_crawl_url 스키마 변경 — keyword-crawler alembic 마이그레이션으로 관리
+- 본문 추출 로직 — extraction-worker 가 처리
+- Solr 스키마 변경 — extraction-worker 프로젝트에서 관리
+- t_crawl_url 스키마 변경 — discovery-worker alembic 마이그레이션으로 관리
 - 기존 URL 재추출 (stored → discovered 리셋) — 이 프로젝트의 범위 밖
