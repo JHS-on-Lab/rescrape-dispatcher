@@ -23,6 +23,7 @@ from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 from sqlalchemy import Engine, text
 
+from app.repository.domain_repo import DomainRepo
 from app.types import SolrDocument
 
 
@@ -71,6 +72,7 @@ _INSERT_SQL = text("""
 class CrawlUrlRepo:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
+        self._domain_repo = DomainRepo(engine)
 
     def bulk_insert_new(
         self,
@@ -80,6 +82,7 @@ class CrawlUrlRepo:
         """
         Solr 문서 목록을 t_crawl_url 에 신규 투입한다.
         이미 존재하는 URL 은 INSERT IGNORE 로 skip 된다.
+        t_domain.excluded=1 인 host 는 애초에 insert 대상에서 제외한다.
 
         반환: (total_docs, inserted)
           - total_docs: 처리 시도한 문서 수
@@ -89,10 +92,10 @@ class CrawlUrlRepo:
             return 0, 0
 
         now = datetime.now(timezone.utc)
-        rows = []
+        candidates = []
         for doc in docs:
             norm = _normalize(doc.url)
-            rows.append({
+            candidates.append({
                 "url":      norm,
                 "hash":     _url_hash(norm),
                 "host":     urlparse(norm).netloc,
@@ -101,7 +104,14 @@ class CrawlUrlRepo:
                 "cdate":    now.date(),
             })
 
+        excluded_hosts = self._domain_repo.get_excluded_hosts(
+            list({row["host"] for row in candidates})
+        )
+        rows = [row for row in candidates if row["host"] not in excluded_hosts]
+        if not rows:
+            return len(candidates), 0
+
         with self._engine.begin() as conn:
             result = conn.execute(_INSERT_SQL, rows)
 
-        return len(rows), result.rowcount
+        return len(candidates), result.rowcount
