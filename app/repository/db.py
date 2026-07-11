@@ -14,16 +14,23 @@ t_crawl_url 테이블에 쓰기만 하므로 읽기는 필요 없다.
 
 from contextlib import contextmanager
 from sqlalchemy import create_engine, Engine
+from sqlalchemy.engine import URL
 from sshtunnel import SSHTunnelForwarder
 
 from app import config
 
 
-def _dsn(host: str, port: int) -> str:
-    return (
-        f"mysql+pymysql://{config.RDS_USER}:{config.RDS_PASSWORD}"
-        f"@{host}:{port}/{config.RDS_CRAWLER_DB}"
-        f"?charset=utf8mb4"
+def _dsn(host: str, port: int) -> URL:
+    # URL.create() 는 username/password 를 자동으로 URL-encoding 한다.
+    # f-string 조립은 비밀번호에 '@' 같은 특수문자가 있으면 DSN 파싱 자체가 깨진다.
+    return URL.create(
+        "mysql+pymysql",
+        username=config.RDS_USER,
+        password=config.RDS_PASSWORD,
+        host=host,
+        port=port,
+        database=config.RDS_CRAWLER_DB,
+        query={"charset": "utf8mb4"},
     )
 
 
