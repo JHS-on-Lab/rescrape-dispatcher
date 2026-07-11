@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass
@@ -15,6 +16,7 @@ class DiConfig:
     filter_query:   str | None # filter_query  (Solr fq 파라미터). 미설정 시 None
     timeperiod:     int        # default_timeperiod — 슬라이딩 윈도우 크기(분)
     max_result_cnt: int        # solr_max_result_cnt
+    last_synced_at: datetime | None = None  # 워터마크. 직접 모드/최초 실행 시 None
 
 
 @dataclass

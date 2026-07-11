@@ -6,8 +6,13 @@
   t_crawl_url 에 INSERT IGNORE 로 신규 URL 만 삽입한다.
   이미 존재하는 URL 은 skip 된다.
 
-  상태 저장 없음. 파일도 테이블도 필요 없다.
-  멀티 인스턴스로 실행해도 INSERT IGNORE 멱등성으로 안전하다.
+  DB 조회 모드는 워터마크(app/repository/watermark_store.py, 로컬 파일)를 같이 써서
+  다운타임으로 슬라이딩 윈도우보다 뒤처진 구간을 상한 내에서 따라잡는다.
+  직접 모드는 워터마크 파일이 없어 상태 저장 없이 순수 슬라이딩 윈도우로 동작한다.
+
+  멀티 인스턴스로 실행해도 INSERT IGNORE 멱등성으로 안전하다. 워터마크 파일은
+  WORKER_ID 별로 분리되므로 같은 DI 설정을 공유하는 여러 컨테이너가 워터마크
+  디렉터리를 공유 마운트해도 서로의 파일을 건드리지 않는다.
 """
 
 from __future__ import annotations
@@ -17,6 +22,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 from app import config
+from app.repository import watermark_store
 from app.repository.di_config_repo import DiConfigRepo
 from app.types import DiConfig, DispatchStats
 from app.repository.db import db_context
@@ -55,13 +61,15 @@ def run_dispatch_loop(worker_id: str) -> None:
     cycle = 0
 
     with db_context() as engine:
-        di_config = resolve_di_config(engine)
+        di_config = resolve_di_config(engine, worker_id)
         logger.info(
             f"solr: url='{di_config.solr_url}' "
             f"q='{di_config.query}' "
             f"filter_query='{di_config.filter_query or '(없음)'}' "
             f"window={di_config.timeperiod}min "
-            f"max={di_config.max_result_cnt}",
+            f"max={di_config.max_result_cnt} "
+            f"url_contains='{config.SOLR_RESCRAPE_URL_CONTAINS or '(없음)'}' "
+            f"watermark={di_config.last_synced_at or '(없음, 순수 슬라이딩 윈도우)'}",
             extra={"phase": "startup", "worker_id": worker_id},
         )
         solr = SolrClient(di_config)
@@ -105,7 +113,7 @@ def _run_one_cycle(
     started = time.monotonic()
 
     try:
-        docs, time_range = solr.query_rescrape_candidates()
+        docs, time_range, window_end = solr.query_rescrape_candidates()
         logger.info(
             f"solr fetched={len(docs)} range={time_range}",
             extra={"phase": "solr_fetch", "worker_id": worker_id},
@@ -120,6 +128,7 @@ def _run_one_cycle(
         return DispatchStats(total_fetched=0, inserted=0, cycle_seconds=elapsed)
 
     if not docs:
+        _advance_watermark_if_db_mode(worker_id, window_end)
         return DispatchStats(
             total_fetched=0,
             inserted=0,
@@ -141,6 +150,10 @@ def _run_one_cycle(
         time.sleep(_ERROR_SLEEP_SEC)
         return DispatchStats(total_fetched=len(docs), inserted=0, cycle_seconds=elapsed)
 
+    # Solr 조회 + DB insert 가 둘 다 성공한 경우에만 워터마크를 전진시킨다 —
+    # 둘 중 하나라도 실패하면 다음 사이클에서 같은 구간을 다시 조회해야 하기 때문.
+    _advance_watermark_if_db_mode(worker_id, window_end)
+
     return DispatchStats(
         total_fetched=len(docs),
         inserted=inserted,
@@ -148,10 +161,21 @@ def _run_one_cycle(
     )
 
 
-def resolve_di_config(engine=None) -> DiConfig:
+def _advance_watermark_if_db_mode(worker_id: str, window_end: datetime) -> None:
+    """DB 조회 모드일 때만 워터마크를 전진시킨다. 직접 모드는 저장할 DI 설정 행이 없어 skip."""
+    if config.SOLR_DIRECT_ENABLED:
+        return
+    watermark_store.advance(
+        config.DI_TNT_ID, config.DI_PROJECT_ID, config.DI_SERVER_IP, worker_id,
+        window_end,
+    )
+
+
+def resolve_di_config(engine=None, worker_id: str = "") -> DiConfig:
     """직접 모드(SOLR_DIRECT_ENABLED) 또는 DB 조회 모드로 Solr 설정을 반환한다.
 
-    직접 모드에서는 engine 불필요. DB 조회 모드에서는 engine 필수.
+    직접 모드에서는 engine 불필요, 워터마크도 없음(항상 순수 슬라이딩 윈도우).
+    DB 조회 모드에서는 engine 필수이고, worker_id 로 로컬 워터마크 파일을 불러온다.
     """
     if config.SOLR_DIRECT_ENABLED:
         return DiConfig(
@@ -169,6 +193,9 @@ def resolve_di_config(engine=None) -> DiConfig:
             f"tnt_id='{config.DI_TNT_ID}' project_id='{config.DI_PROJECT_ID}' "
             f"di_server_ip='{config.DI_SERVER_IP}' 에 해당하는 행을 찾을 수 없거나 use_yn='N' 입니다."
         )
+    di_config.last_synced_at = watermark_store.load(
+        config.DI_TNT_ID, config.DI_PROJECT_ID, config.DI_SERVER_IP, worker_id,
+    )
     return di_config
 
 

@@ -39,6 +39,7 @@ APP_ENV="${APP_ENV:-dev}"
 ENV_FILE="${PROJECT_ROOT}/.env.${APP_ENV}"
 
 LOG_DIR="${HOME}/apps/data/rescrape-dispatcher/logs"
+WATERMARK_DIR="${HOME}/apps/data/rescrape-dispatcher/watermark"
 
 if [[ ! -f "${ENV_FILE}" ]]; then
     echo "오류: 환경 설정 파일을 찾을 수 없습니다: ${ENV_FILE}"
@@ -48,6 +49,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 
 mkdir -p "${LOG_DIR}"
+mkdir -p "${WATERMARK_DIR}"
 
 CONTAINER_NAME="${WORKER_ID}"
 
@@ -59,9 +61,10 @@ fi
 IMAGE="rescrape-dispatcher:latest"
 
 echo "▶ 컨테이너 시작: ${CONTAINER_NAME}"
-echo "  이미지   : ${IMAGE}"
-echo "  환경설정 : ${ENV_FILE}"
-echo "  로그     : ${LOG_DIR}"
+echo "  이미지    : ${IMAGE}"
+echo "  환경설정  : ${ENV_FILE}"
+echo "  로그      : ${LOG_DIR}"
+echo "  워터마크  : ${WATERMARK_DIR} (DB 조회 모드 전용, 직접 모드는 미사용)"
 echo ""
 
 docker run \
@@ -72,7 +75,9 @@ docker run \
     --env-file "${ENV_FILE}" \
     -e APP_ENV="${APP_ENV}" \
     -e WORKER_ID="${WORKER_ID}" \
+    -e WATERMARK_DIR="/app/watermark" \
     -v "${LOG_DIR}:/app/logs" \
+    -v "${WATERMARK_DIR}:/app/watermark" \
     "${IMAGE}" \
     python -m app
 

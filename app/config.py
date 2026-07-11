@@ -61,6 +61,23 @@ SOLR_FILTER_QUERY      = _env("SOLR_FILTER_QUERY", "")    # 직접 모드 fq 파
 SLIDING_WINDOW_MINUTES = _env_int("SLIDING_WINDOW_MINUTES", 30)  # 직접 모드 슬라이딩 윈도우(분)
 SOLR_MAX_DOCS          = _env_int("SOLR_MAX_DOCS", 1000)  # 직접 모드 최대 조회 수
 
+# URL contains 패턴 필터 (쉼표 구분, OR 결합) — 직접/DB 모드 공통.
+# 각 패턴은 url:*{패턴}* wildcard fq 로 변환된다. 미설정 시 필터 없음.
+SOLR_RESCRAPE_URL_CONTAINS = _env("SOLR_RESCRAPE_URL_CONTAINS", "")
+
+# DB 조회 모드에서 워터마크(last_synced_at)가 슬라이딩 윈도우보다 오래 뒤처졌을 때
+# 최대 이만큼(분)까지만 과거로 확장해서 조회한다 — 장기 다운타임 후 한 번에
+# 너무 넓은 범위를 긁어오는 것을 방지하는 상한. 직접 모드에는 적용되지 않는다
+# (워터마크를 저장할 DB 행이 없어 순수 슬라이딩 윈도우로만 동작).
+SOLR_RESCRAPE_MAX_WATERMARK_LOOKBACK_MINUTES = _env_int(
+    "SOLR_RESCRAPE_MAX_WATERMARK_LOOKBACK_MINUTES", 1440
+)
+
+# 워터마크 로컬 파일 저장 경로 (DB 조회 모드 전용). trendtracker.t_di_config_v1 은
+# 외부 소유 테이블이라 컬럼을 추가할 수 없어 DB 대신 파일로 저장한다.
+# 컨테이너 재시작에도 유지하려면 호스트 볼륨으로 마운트할 것.
+WATERMARK_DIR = _env("WATERMARK_DIR", "./watermark")
+
 # DB 조회 모드 조건 (SOLR_URL 비워둔 경우에만 사용)
 DI_TNT_ID       = _env("DI_TNT_ID", "")
 DI_PROJECT_ID   = _env("DI_PROJECT_ID", "")

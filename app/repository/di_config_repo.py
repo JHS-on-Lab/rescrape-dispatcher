@@ -3,6 +3,10 @@ trendtracker.t_di_config_v1 조회 — Solr 접속·쿼리 설정 획득.
 
 tnt_id, project_id, di_server_ip 세 조건으로 1행을 조회하고
 DiConfig 를 반환한다. 조건값은 .env 의 DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP.
+
+주의: 이 테이블은 외부(trendtracker) 소유라 컬럼 추가/스키마 변경 권한이 없다.
+워터마크(last_synced_at)는 이 테이블이 아니라 app/repository/watermark_store.py 가
+로컬 파일로 별도 관리한다.
 """
 
 from __future__ import annotations
