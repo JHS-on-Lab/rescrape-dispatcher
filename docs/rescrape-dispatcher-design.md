@@ -65,7 +65,7 @@ Solr 에 새로 수집된 콘텐츠 중 **특정 URL 패턴을 가진 신규 문
    a. SolrClient → /select 요청 (슬라이딩 윈도우 + cursor 페이지네이션)
       조건: collected_at:[NOW-{WINDOW}MINUTES TO NOW]
             + SOLR_RESCRAPE_URL_CONTAINS (설정 시)
-      최대: SOLR_RESCRAPE_MAX_DOCS 건
+      최대: SOLR_MAX_DOCS 건
    b. CrawlUrlRepo.bulk_insert_new()
       - 신규 URL → status=discovered 로 INSERT
       - 이미 존재하는 URL → 변경 없음 (INSERT IGNORE)
@@ -153,11 +153,15 @@ cursorMark 의 안정성을 위해 `id asc` 를 두 번째 정렬 키로 함께 
 
 | 환경변수 | Solr 파라미터 | 설명 | 예시 |
 |---|---|---|---|
-| `SOLR_RESCRAPE_QUERY` | `q` | 기본 쿼리 | `*:*` (기본) |
+| `SOLR_QUERY` | `q` | 기본 쿼리 | `*:*` (기본) |
 | `SLIDING_WINDOW_MINUTES` | `fq` | 슬라이딩 윈도우 크기(분) | `10` |
 | `SOLR_RESCRAPE_URL_CONTAINS` | `fq` | URL contains 패턴 필터 | `#keyword` |
-| `SOLR_RESCRAPE_MAX_DOCS` | — | 1사이클 최대 URL 수 | `1000` |
+| `SOLR_MAX_DOCS` | — | 1사이클 최대 URL 수 | `1000` |
 | `SOLR_QUERY_BATCH_SIZE` | — | Solr 요청 1회당 rows | `100` |
+
+(환경변수 이름은 `app/config.py` 실제 정의 기준. `SOLR_RESCRAPE_URL_CONTAINS`만
+`RESCRAPE` 접두어가 붙고 나머지는 안 붙는 게 일관성은 없지만, 코드 변경 없이
+이 문서를 실제 이름에 맞춰 정정한 것 — 서버 .env 를 바꿀 필요 없음.)
 
 #### SOLR_RESCRAPE_URL_CONTAINS 예시
 
@@ -272,11 +276,13 @@ app/
 | `WORKER_ID` | `rescrape-1` | 워커 식별자 |
 | `SOLR_URL` | (필수) | Solr 코어 URL |
 | `HTTP_VERIFY_SSL` | `true` | SSL 검증 여부 |
-| `SOLR_RESCRAPE_QUERY` | `*:*` | Solr q 파라미터 |
+| `SOLR_QUERY` | `*:*` | Solr q 파라미터 |
 | `SOLR_RESCRAPE_URL_CONTAINS` | `` | URL contains 패턴 (쉼표 구분, OR 결합) |
 | `SLIDING_WINDOW_MINUTES` | `10` | 슬라이딩 윈도우 크기(분). 주기의 2배 권장 |
 | `SOLR_QUERY_BATCH_SIZE` | `100` | Solr 요청 1회당 rows |
-| `SOLR_RESCRAPE_MAX_DOCS` | `1000` | 1사이클 최대 URL 수 |
+| `SOLR_MAX_DOCS` | `1000` | 1사이클 최대 URL 수 |
+| `WATERMARK_DIR` | `./watermark` | 워터마크 로컬 파일 저장 경로 (DB 조회 모드 전용) |
+| `SOLR_RESCRAPE_MAX_WATERMARK_LOOKBACK_MINUTES` | `1440` | 다운타임 후 최대 이만큼(분)까지만 과거로 확장 조회 |
 | `DISPATCH_INTERVAL_SECONDS` | `300` | 사이클 반복 주기(초). 기본 5분 |
 | `RESCRAPE_PRIORITY` | `5` | 투입 URL 우선순위 |
 | `LOG_DIR` | `./logs` | 로그 디렉토리 |

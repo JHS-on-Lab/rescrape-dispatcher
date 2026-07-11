@@ -51,11 +51,11 @@ TUNNEL_LOCAL_PORT=13307
 SOLR_URL=http://localhost:8983/solr/news
 HTTP_VERIFY_SSL=true
 
-# 조회 조건
-SOLR_RESCRAPE_QUERY=*:*
+# 조회 조건 (실제 env var 이름은 app/config.py 기준 — RESCRAPE 접두어 없음)
+SOLR_QUERY=*:*
 SOLR_RESCRAPE_URL_CONTAINS=              # URL contains 패턴 (쉼표 구분, OR 결합)
 SLIDING_WINDOW_MINUTES=10                # 슬라이딩 윈도우 크기(분). 주기의 2배 권장
-SOLR_RESCRAPE_MAX_DOCS=1000
+SOLR_MAX_DOCS=1000
 SOLR_QUERY_BATCH_SIZE=100
 
 # 워터마크 (DB 조회 모드 전용 — 직접 모드는 순수 슬라이딩 윈도우만 사용)

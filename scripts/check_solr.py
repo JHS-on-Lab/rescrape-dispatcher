@@ -22,32 +22,35 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import httpx
 
 from app import config
+from app.repository.db import db_context
+from app.scheduling.dispatcher import resolve_di_config
 
 
 def _get_solr_url() -> str:
-    if config.SOLR_DIRECT_ENABLED:
-        if not config.SOLR_URL:
-            print("[오류] SOLR_DIRECT_ENABLED=true 이지만 SOLR_URL 이 설정되지 않았습니다.")
-            sys.exit(1)
-        print("[모드] 직접 접속 (SOLR_DIRECT_ENABLED=true)")
-        return config.SOLR_URL
+    """resolve_di_config() 로 직접/DB 조회 모드를 판단해 solr_url 을 반환한다.
 
-    if not (config.DI_TNT_ID and config.DI_PROJECT_ID and config.DI_SERVER_IP):
-        print("[오류] DI_TNT_ID / DI_PROJECT_ID / DI_SERVER_IP 를 .env 에 설정하세요.")
+    dispatcher.py 와 동일한 로직을 재사용한다 — 이전에는 이 스크립트만 별도로
+    구현하고 있어서 dispatcher.py 쪽 로직이 바뀌면 스크립트가 따라가지 못했다.
+    """
+    try:
+        if config.SOLR_DIRECT_ENABLED:
+            print("[모드] 직접 접속 (SOLR_DIRECT_ENABLED=true)")
+            di_config = resolve_di_config()
+        else:
+            print(
+                f"[모드] DB 조회 "
+                f"(tnt_id={config.DI_TNT_ID} project_id={config.DI_PROJECT_ID}"
+                f" di_server_ip={config.DI_SERVER_IP})"
+            )
+            with db_context() as engine:
+                di_config = resolve_di_config(engine)
+    except RuntimeError as e:
+        print(f"[오류] {e}")
         sys.exit(1)
 
-    print(
-        f"[모드] DB 조회 "
-        f"(tnt_id={config.DI_TNT_ID} project_id={config.DI_PROJECT_ID} di_server_ip={config.DI_SERVER_IP})"
-    )
-    from app.repository.db import db_context
-    from app.repository.di_config_repo import DiConfigRepo
-
-    with db_context() as engine:
-        di_config = DiConfigRepo(engine).get_config()
-
-    if not di_config:
-        print("[오류] t_di_config_v1 에서 조건에 맞는 행이 없거나 use_yn='N' 입니다.")
+    if not di_config.solr_url:
+        print("[오류] solr_url 이 비어 있습니다. SOLR_URL(직접 모드) 또는 "
+              "t_di_config_v1.solr_url(DB 조회 모드) 설정을 확인하세요.")
         sys.exit(1)
 
     return di_config.solr_url

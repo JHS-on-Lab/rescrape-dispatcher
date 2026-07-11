@@ -35,6 +35,12 @@ KST = timezone(timedelta(hours=9))
 
 _ERROR_SLEEP_SEC = 30
 
+# time.sleep(DISPATCH_INTERVAL_SECONDS) 를 한 번에 통으로 자면 그 사이엔 heartbeat 를
+# 찍을 수 없다 — DISPATCH_INTERVAL_SECONDS(기본 300s) 가 HEARTBEAT_INTERVAL_SECONDS
+# (기본 60s) 보다 길면, 실제 heartbeat 주기가 설정값이 아니라 사이클 주기로 밀린다.
+# 이 틱 단위로 잘게 나눠 자면서 그 사이에도 heartbeat 를 체크한다.
+_SLEEP_TICK_SEC = 1.0
+
 
 def run_dispatch_loop(worker_id: str) -> None:
     """디스패처 메인 루프. __main__.py 에서 호출."""
@@ -77,13 +83,7 @@ def run_dispatch_loop(worker_id: str) -> None:
 
         try:
             while True:
-                now = time.monotonic()
-                if now - last_heartbeat >= heartbeat_interval:
-                    logger.info(
-                        f"heartbeat cycle={cycle}",
-                        extra={"phase": "heartbeat", "worker_id": worker_id},
-                    )
-                    last_heartbeat = now
+                last_heartbeat = _maybe_heartbeat(cycle, worker_id, heartbeat_interval, last_heartbeat)
 
                 stats = _run_one_cycle(url_repo, solr, worker_id)
                 cycle += 1
@@ -96,9 +96,39 @@ def run_dispatch_loop(worker_id: str) -> None:
                     extra={"phase": "cycle_done", "worker_id": worker_id},
                 )
 
-                time.sleep(config.DISPATCH_INTERVAL_SECONDS)
+                last_heartbeat = _sleep_with_heartbeat(
+                    config.DISPATCH_INTERVAL_SECONDS, cycle, worker_id, heartbeat_interval, last_heartbeat,
+                )
         finally:
             solr.close()
+
+
+def _maybe_heartbeat(cycle: int, worker_id: str, heartbeat_interval: float, last_heartbeat: float) -> float:
+    """heartbeat_interval 이 지났으면 heartbeat 로그를 남기고 갱신된 시각을 반환한다."""
+    now = time.monotonic()
+    if now - last_heartbeat >= heartbeat_interval:
+        logger.info(
+            f"heartbeat cycle={cycle}",
+            extra={"phase": "heartbeat", "worker_id": worker_id},
+        )
+        return now
+    return last_heartbeat
+
+
+def _sleep_with_heartbeat(
+    total_seconds: float, cycle: int, worker_id: str,
+    heartbeat_interval: float, last_heartbeat: float,
+) -> float:
+    """total_seconds 만큼 대기하되, _SLEEP_TICK_SEC 단위로 잘게 나눠 자면서
+    그 사이에도 heartbeat_interval 마다 heartbeat 를 찍는다."""
+    deadline = time.monotonic() + total_seconds
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(_SLEEP_TICK_SEC, remaining))
+        last_heartbeat = _maybe_heartbeat(cycle, worker_id, heartbeat_interval, last_heartbeat)
+    return last_heartbeat
 
 
 def _run_one_cycle(
