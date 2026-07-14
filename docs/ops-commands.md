@@ -246,3 +246,20 @@ grep "cycle_done" logs/rescrape-rescrape-1.log | tail -5
 | `skipped` | 이미 존재해 INSERT IGNORE 로 skip 된 URL 수 |
 
 `skipped > 0` 은 정상 동작이다 — 슬라이딩 윈도우의 겹침 구간 문서가 skip 된 것.
+
+---
+
+## 10. 진단 스크립트
+
+DB에 쓰지 않는(`run_once.py` 제외) 읽기 전용 확인용 스크립트들.
+
+| 스크립트 | 용도 |
+|---|---|
+| `scripts/check_db.py` | crawlerdb(`t_crawl_url`)·trendtracker(`t_di_config_v1`) 두 스키마 접속 확인 |
+| `scripts/check_di_config.py` | `DI_TNT_ID`/`DI_PROJECT_ID`/`DI_SERVER_IP` 로 `t_di_config_v1` 조회 결과(Solr 접속 정보 포함) 출력 |
+| `scripts/check_solr.py` | Solr 접속 모드(직접/DB조회) 판별 → ping → 저장 문서 수 확인 |
+| `scripts/check_solr_count.py [--no-window]` | Solr 조회 건수 확인. 기본은 슬라이딩 윈도우 적용, `--no-window` 는 전체 조회 |
+| `scripts/check_dispatch.py [--limit N]` | 디스패치 dry-run — Solr 조회까지만 하고 DB에는 INSERT 안 함(기본 20건 출력) |
+| `scripts/run_once.py` | 디스패치 1회 실행(Solr 조회 → `t_crawl_url` INSERT) 후 종료. 워커 전체 루프 없이 단건 테스트용 — **DB에 실제로 씀** |
+
+모두 `python scripts/<파일명>` 으로 실행하고, 접속 정보는 워커와 동일하게 `.env`/`.env.{APP_ENV}` 를 읽는다.
