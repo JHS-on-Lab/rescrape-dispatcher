@@ -9,6 +9,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import create_engine, Engine
+from sqlalchemy.engine import URL
 from sshtunnel import SSHTunnelForwarder
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -23,11 +24,17 @@ from migrations.models import metadata
 target_metadata = metadata
 
 
-def _dsn(host: str, port: int) -> str:
-    return (
-        f"mysql+pymysql://{app_config.RDS_USER}:{app_config.RDS_PASSWORD}"
-        f"@{host}:{port}/{app_config.RDS_TRENDTRACKER_DB}"
-        f"?charset=utf8mb4"
+def _dsn(host: str, port: int) -> URL:
+    # URL.create() 는 username/password 를 자동으로 URL-encoding 한다.
+    # f-string 조립은 비밀번호에 '@' 같은 특수문자가 있으면 DSN 파싱 자체가 깨진다.
+    return URL.create(
+        "mysql+pymysql",
+        username=app_config.RDS_USER,
+        password=app_config.RDS_PASSWORD,
+        host=host,
+        port=port,
+        database=app_config.RDS_TRENDTRACKER_DB,
+        query={"charset": "utf8mb4"},
     )
 
 
