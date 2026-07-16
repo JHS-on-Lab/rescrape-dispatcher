@@ -41,7 +41,7 @@ def main() -> None:
         solr = SolrClient(di_config)
         print("Solr 조회 중...")
         try:
-            docs, time_range = solr.query_rescrape_candidates()
+            docs, time_range, _window_end = solr.query_rescrape_candidates()
         except Exception as e:
             print(f"[오류] Solr 조회 실패: {e}")
             sys.exit(1)

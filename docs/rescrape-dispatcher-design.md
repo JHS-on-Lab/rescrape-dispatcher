@@ -66,12 +66,13 @@ Solr 에 새로 수집된 콘텐츠 중 **특정 URL 패턴을 가진 신규 문
       조건: collected_at:[NOW-{WINDOW}MINUTES TO NOW]
             + SOLR_RESCRAPE_URL_CONTAINS (설정 시)
       최대: SOLR_MAX_DOCS 건
-   b. CrawlUrlRepo.bulk_insert_new()
+   b. t_domain.excluded=1 인 host의 URL을 결과에서 사전 필터링
+   c. CrawlUrlRepo.bulk_insert_new()
       - 신규 URL → status=discovered 로 INSERT
       - 이미 존재하는 URL → 변경 없음 (INSERT IGNORE)
-   c. 결과 로그 기록 (fetched / inserted / skipped)
-   d. DISPATCH_INTERVAL_SECONDS 대기
-   e. → 3으로 반복
+   d. 결과 로그 기록 (fetched / inserted / skipped)
+   e. DISPATCH_INTERVAL_SECONDS 대기
+   f. → 3으로 반복
 ```
 
 ---
@@ -195,10 +196,12 @@ Solr 에서 가져오는 필드: `id`, `url`
 
 ### 6.1 t_crawl_url 투입 규칙
 
-`url_hash` UNIQUE 제약 기준 INSERT IGNORE.
+`url_hash` UNIQUE 제약 기준 INSERT IGNORE. INSERT 시도 전에 host가 `t_domain.excluded=1`인
+URL은 먼저 걸러낸다(discovery-worker와 동일한 도메인 차단 정책).
 
 | 기존 상태 | 처리 |
 |---|---|
+| host가 `t_domain.excluded=1` | INSERT 시도 자체를 하지 않음(사전 필터링) |
 | 없음 (신규 URL) | `status=discovered` 로 INSERT |
 | 이미 존재 (어떤 status 든) | 변경 없음 (INSERT IGNORE skip) |
 
@@ -225,11 +228,17 @@ discovery-worker / extraction-worker 와 동일한 URL 정규화 로직을 `craw
 
 정규화 규칙: http→https, 호스트 소문자, 추적 파라미터 제거, 끝 슬래시 제거, 기본 포트 제거, 프래그먼트 제거.
 
+**도메인별 예외**: `v.daum.net`은 `?f=` 쿼리 파라미터를 정규화 시 별도로 제거한다
+(discovery-worker가 저장한 url_hash와 일치시키기 위한 특수 처리, `crawl_url_repo.py`).
+
 ---
 
 ## 7. 스케줄링
 
-- 단일 루프 프로세스. cron 이 아니라 내부 `time.sleep(DISPATCH_INTERVAL_SECONDS)` 로 반복.
+- 단일 루프 프로세스. cron 이 아니라 내부 대기 루프로 반복하며, 전체 대기 시간은
+  `DISPATCH_INTERVAL_SECONDS`다. 실제로는 한 번에 `time.sleep(interval)`을 호출하지 않고
+  1초 단위(`_SLEEP_TICK_SEC`)로 쪼개 반복 대기한다 — 대기 도중에도 하트비트가 갱신되도록
+  하기 위한 의도적 구현(사이클 도중 heartbeat가 안 갱신되던 버그 수정).
 - 기본 주기: 300초(5분). 환경변수로 조정 가능.
 - 복수 인스턴스를 띄워도 INSERT IGNORE 멱등성으로 중복 투입은 안전하다.
 
@@ -246,7 +255,10 @@ app/
 
   repository/
     db.py                # SSH 터널(옵션) + SQLAlchemy 엔진 context manager
-    crawl_url_repo.py  # t_crawl_url bulk_insert_new()
+    crawl_url_repo.py    # t_crawl_url bulk_insert_new() (t_domain.excluded 필터링 포함)
+    domain_repo.py       # t_domain.excluded 조회 (도메인 차단 필터링용)
+    di_config_repo.py    # trendtracker.t_di_config_v1 조회 (DB-lookup 모드)
+    watermark_store.py   # 워터마크 파일 read/write (DB-lookup 모드)
 
   solr/
     client.py            # SolrClient — 슬라이딩 윈도우 + cursor 페이지네이션
@@ -274,11 +286,16 @@ app/
 | `TUNNEL_SSH_KEY_PATH` | — | SSH 키 파일 경로 |
 | `TUNNEL_LOCAL_PORT` | `13307` | 로컬 터널 포트 |
 | `WORKER_ID` | `rescrape-1` | 워커 식별자 |
-| `SOLR_URL` | (필수) | Solr 코어 URL |
+| `SOLR_DIRECT_ENABLED` | `false` | `true`=direct 모드(env의 `SOLR_URL` 직접 사용), `false`=DB-lookup 모드(`t_di_config_v1` 조회) |
+| `SOLR_URL` | `` (direct 모드일 때만 사용) | Solr 코어 URL — **`config.validate()`가 검증하지 않음**. direct 모드에서 비워두면 기동은 성공하고 매 사이클 Solr 요청만 조용히 실패한다 |
+| `DI_TNT_ID` | `` (DB-lookup 모드 필수) | 테넌트 id, `t_di_config_v1` 조회 키 |
+| `DI_PROJECT_ID` | `` (DB-lookup 모드 필수) | 프로젝트 id, 조회 키 |
+| `DI_SERVER_IP` | `` (DB-lookup 모드 필수) | DI 서버 IP, 조회 키 |
 | `HTTP_VERIFY_SSL` | `true` | SSL 검증 여부 |
 | `SOLR_QUERY` | `*:*` | Solr q 파라미터 |
+| `SOLR_FILTER_QUERY` | `` | 추가 Solr fq 파라미터 (direct 모드) |
 | `SOLR_RESCRAPE_URL_CONTAINS` | `` | URL contains 패턴 (쉼표 구분, OR 결합) |
-| `SLIDING_WINDOW_MINUTES` | `10` | 슬라이딩 윈도우 크기(분). 주기의 2배 권장 |
+| `SLIDING_WINDOW_MINUTES` | `30` | 슬라이딩 윈도우 크기(분). 주기의 2배 권장 |
 | `SOLR_QUERY_BATCH_SIZE` | `100` | Solr 요청 1회당 rows |
 | `SOLR_MAX_DOCS` | `1000` | 1사이클 최대 URL 수 |
 | `WATERMARK_DIR` | `./watermark` | 워터마크 로컬 파일 저장 경로 (DB 조회 모드 전용) |
@@ -288,7 +305,13 @@ app/
 | `LOG_DIR` | `./logs` | 로그 디렉토리 |
 | `LOG_LEVEL` | `INFO` | 로그 레벨 |
 | `LOG_ROTATION` | `daily` | 로그 로테이션 방식 |
+| `LOG_RETAIN_DAYS` | `30` | `daily` 모드 보관 일수 |
+| `LOG_BACKUP_COUNT` | `10` | `size` 모드 보관 파일 수 |
 | `HEARTBEAT_INTERVAL_SECONDS` | `60` | 하트비트 주기(초) |
+
+`RDS_CRAWLER_DB`(INSERT 대상)와 `DI_TNT_ID`/`DI_PROJECT_ID`/`DI_SERVER_IP`(DB-lookup 모드
+필수)는 `config.validate()`가 기동 시 검증한다. `SOLR_URL`은 direct 모드에서도 검증 대상이
+아니므로 별도로 확인해야 한다(README 참고).
 
 ---
 
@@ -313,7 +336,10 @@ docker run --env-file .env.prod rescrape-dispatcher:latest python -m app
 docker run --env-file .env.prod rescrape-dispatcher:latest python -m app --worker-id rescrape-prod-1
 ```
 
-볼륨 마운트 불필요 (슬라이딩 윈도우는 상태를 저장하지 않는다).
+**direct 모드**는 상태를 저장하지 않으므로 볼륨 마운트가 불필요하다.
+**DB-lookup 모드(기본값)**는 워터마크 파일을 유지해야 하므로 `WATERMARK_DIR`을 호스트
+볼륨으로 마운트해야 재시작 후에도 마지막 동기화 시각이 유지된다(`deploy/run.sh`는
+두 모드 구분 없이 항상 `logs`+`watermark`를 마운트한다).
 
 ### 10.3 Docker Compose 예시
 
@@ -324,9 +350,13 @@ services:
     command: ["python", "-m", "app", "--worker-id", "rescrape-1"]
     env_file: .env.prod
     restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./watermark:/app/watermark   # DB-lookup 모드일 때만 필요, direct 모드면 생략 가능
 ```
 
-멀티 인스턴스 (다른 URL 패턴 처리):
+멀티 인스턴스 (다른 URL 패턴 처리) — 워터마크 파일은 `WORKER_ID`로 분리되므로
+같은 볼륨을 공유 마운트해도 안전하다:
 
 ```yaml
 services:
@@ -337,6 +367,9 @@ services:
       SOLR_RESCRAPE_URL_CONTAINS: "news.naver.com"
     env_file: .env.prod
     restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./watermark:/app/watermark
 
   rescrape-daum:
     image: rescrape-dispatcher:latest
@@ -345,6 +378,9 @@ services:
       SOLR_RESCRAPE_URL_CONTAINS: "news.daum.net"
     env_file: .env.prod
     restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+      - ./watermark:/app/watermark
 ```
 
 ---
@@ -360,18 +396,24 @@ services:
 
 ### 11.2 주요 로그 항목
 
+> `dispatcher.py`는 `logging.getLogger(__name__)`을 직접 쓰고 `logging_setup.setup()`을
+> 거치지 않으므로, 아래 컴포넌트 태그는 실제로는 전부 `[app]`로 찍힌다(`[dispatcher]`가
+> 아님). `__main__.py`에서 나가는 shutdown 로그만 `[main]`이 맞다.
+
 ```
 # 시작
-2026-06-11T09:00:00Z INFO  [main] worker=rescrape-1 phase=startup dispatch loop started
-2026-06-11T09:00:00Z INFO  [main] worker=rescrape-1 phase=startup config: query='*:*' window=10min url_contains='#keyword' max_docs=1000 interval=300s
+2026-06-11T09:00:00Z INFO  [main] worker=rescrape-1 phase=shutdown ...
+
+2026-06-11T09:00:00Z INFO  [app] worker=rescrape-1 phase=startup solr 모드: 직접 접속 (SOLR_DIRECT_ENABLED=true) interval=300s
+2026-06-11T09:00:00Z INFO  [app] worker=rescrape-1 phase=startup solr: url='...' q='*:*' filter_query='' window=30min max=1000 url_contains='#keyword' watermark=...
 
 # 1사이클 완료
-2026-06-11T09:00:02Z INFO  [dispatcher] worker=rescrape-1 phase=solr_fetch solr fetched=43
-2026-06-11T09:00:02Z INFO  [dispatcher] worker=rescrape-1 phase=db_insert db insert total=43 inserted=38 skipped=5
-2026-06-11T09:00:02Z INFO  [dispatcher] worker=rescrape-1 phase=cycle_done cycle=1 fetched=43 inserted=38 elapsed=2.1s next_run=09:05 KST
+2026-06-11T09:00:02Z INFO  [app] worker=rescrape-1 phase=solr_fetch solr fetched=43 range=...
+2026-06-11T09:00:02Z INFO  [app] worker=rescrape-1 phase=db_insert db insert total=43 inserted=38 skipped=5
+2026-06-11T09:00:02Z INFO  [app] worker=rescrape-1 phase=cycle_done cycle=1 fetched=43 inserted=38 elapsed=2.1s next_run=09:05 KST
 
 # 하트비트
-2026-06-11T09:01:02Z INFO  [dispatcher] worker=rescrape-1 phase=heartbeat heartbeat cycle=1
+2026-06-11T09:01:02Z INFO  [app] worker=rescrape-1 phase=heartbeat heartbeat cycle=1
 ```
 
 ### 11.3 inserted / skipped 해석
@@ -380,9 +422,11 @@ services:
 |---|---|
 | `fetched` | Solr 에서 가져온 문서 수 |
 | `inserted` | t_crawl_url 에 실제 삽입된 신규 URL 수 |
-| `skipped` | 이미 존재해 INSERT IGNORE 로 skip 된 URL 수 (`fetched - inserted`) |
+| `skipped` | `fetched - inserted`. **두 가지 원인이 섞여 있다**: (1) 이미 존재해 INSERT IGNORE 로 skip 된 URL, (2) host가 `t_domain.excluded=1`이라 INSERT 시도 자체를 안 한 URL. 로그만으로는 두 원인을 구분할 수 없다. |
 
-`skipped > 0` 은 정상 동작이다 — 윈도우 내 중복 조회 구간의 문서가 skip 된 것.
+`skipped > 0` 은 대부분 정상 동작이다 — 윈도우 내 중복 조회 구간의 문서가 skip 된 것.
+다만 `skipped`가 비정상적으로 크면 도메인 차단 목록에 걸린 host가 많은 것일 수 있으니
+`t_domain.excluded` 를 함께 확인할 것.
 
 ---
 
@@ -396,7 +440,7 @@ services:
 | 베이스 이미지 | playwright/python | playwright/python | python:3.12-slim |
 | 의존성 | httpx, undetected-chromedriver 등 | Playwright, trafilatura, lxml 등 | SQLAlchemy, httpx 만 |
 | 스케줄링 | DB 기반 키워드 스케줄 | DB 기반 URL 큐 | 단순 time.sleep 루프 |
-| Docker 볼륨 | 필요 (로그) | 필요 (로그, 출력) | 필요 (로그) |
+| Docker 볼륨 | 필요 (로그) | 필요 (로그, 출력) | 필요 (로그, DB-lookup 모드는 watermark도) |
 
 ---
 
@@ -404,5 +448,6 @@ services:
 
 - 본문 추출 로직 — extraction-worker 가 처리
 - Solr 스키마 변경 — extraction-worker 프로젝트에서 관리
-- t_crawl_url 스키마 변경 — discovery-worker alembic 마이그레이션으로 관리
+- t_crawl_url 스키마 변경 — discovery-worker 소관(`crawlerdb-migrations` 저장소)
+- t_di_config_v1 스키마 변경 — 이 프로젝트는 마이그레이션 도구 없이 기존 테이블을 조회만 한다
 - 기존 URL 재추출 (stored → discovered 리셋) — 이 프로젝트의 범위 밖

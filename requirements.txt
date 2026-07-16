@@ -1,7 +1,6 @@
 # DB
 SQLAlchemy==2.0.41
 PyMySQL==1.1.1
-alembic==1.14.1
 
 # SSH Tunnel
 sshtunnel==0.4.0
