@@ -33,19 +33,29 @@ python -m app --help
 ## 2. 환경변수 (.env)
 
 ```dotenv
-# DB 접속 (discovery-worker / extraction-worker 와 같은 RDS)
+# DB 접속 (discovery-worker / extraction-worker 와 같은 RDS) — crawlerdb 스키마
 RDS_HOST=
 RDS_PORT=3306
 RDS_USER=
 RDS_PASSWORD=
 RDS_CRAWLER_DB=crawlerdb
+RDS_TRENDTRACKER_DB=trendtracker
 
-# SSH 터널 (로컬에서 RDS 직접 접근 시)
+# trendtracker(t_di_config_v1)가 crawlerdb와 다른 서버에 있을 때만 설정한다.
+# 비워두면 위 RDS_HOST/PORT/USER/PASSWORD로 폴백한다(같은 서버 배포는 아래 4줄 불필요).
+RDS_TRENDTRACKER_HOST=
+RDS_TRENDTRACKER_PORT=
+RDS_TRENDTRACKER_USER=
+RDS_TRENDTRACKER_PASSWORD=
+
+# SSH 터널 (로컬에서 RDS 직접 접근 시) — bastion은 crawlerdb/trendtracker 공용,
+# 로컬 포워딩 포트만 분리(두 터널이 동시에 열려도 충돌하지 않도록)
 TUNNEL_ENABLED=true
 TUNNEL_SSH_HOST=
 TUNNEL_SSH_USER=ubuntu
 TUNNEL_SSH_KEY_PATH=
 TUNNEL_LOCAL_PORT=13307
+TUNNEL_TRENDTRACKER_LOCAL_PORT=13308
 
 # Solr — extraction-worker 가 결과를 저장한 코어
 # direct 모드(SOLR_DIRECT_ENABLED=true)에서만 사용. config.validate()가 검증하지

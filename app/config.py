@@ -21,15 +21,23 @@ load_dotenv(_root / f".env.{_app_env}", override=True)
 
 
 def _env(key: str, default: str = "") -> str:
-    return os.getenv(key, default)
+    # os.getenv(key, default)는 key가 아예 없을 때만 default를 쓰고, .env 파일에
+    # "KEY=" 처럼 빈 값으로 정의된 경우(존재는 하지만 빈 문자열)는 그대로 ""를
+    # 반환한다 — 폴백이 안 걸린다. 빈 문자열도 "미설정"으로 취급해야 RDS_TRENDTRACKER_*
+    # 처럼 ".env에 키만 두고 값은 비워서 상위 값으로 폴백"하는 패턴이 의도대로 동작한다.
+    return os.getenv(key) or default
 
 
 def _env_int(key: str, default: int) -> int:
-    return int(os.getenv(key, str(default)))
+    val = os.getenv(key)
+    return int(val) if val else default
 
 
 def _env_bool(key: str, default: bool = False) -> bool:
-    return os.getenv(key, str(default)).lower() in ("true", "1", "yes")
+    val = os.getenv(key)
+    if not val:
+        return default
+    return val.lower() in ("true", "1", "yes")
 
 
 # SSH Tunnel
@@ -48,12 +56,26 @@ RDS_PASSWORD         = _env("RDS_PASSWORD")
 RDS_CRAWLER_DB       = _env("RDS_CRAWLER_DB")       # INSERT 대상 (t_crawl_url)
 RDS_TRENDTRACKER_DB  = _env("RDS_TRENDTRACKER_DB", "trendtracker")  # SELECT 대상 (t_di_config_v1)
 
+# trendtracker(t_di_config_v1)는 crawlerdb와 다른 DB 서버에 있을 수 있어 접속 정보를
+# 별도로 둔다. 값을 지정하지 않으면 위 crawlerdb 접속 정보를 그대로 쓰므로, 두 스키마가
+# 같은 서버에 있는 기존 배포는 .env 변경 없이 그대로 동작한다.
+# SSH 터널은 crawlerdb와 같은 bastion(TUNNEL_SSH_HOST/PORT/USER/KEY_PATH)을 공유하고,
+# 접속 대상(host/port)과 로컬 포워딩 포트만 분리한다(둘 다 TUNNEL_ENABLED=true면
+# 동시에 열리는 두 터널이 서로 다른 로컬 포트를 써야 하기 때문).
+RDS_TRENDTRACKER_HOST          = _env("RDS_TRENDTRACKER_HOST", RDS_HOST)
+RDS_TRENDTRACKER_PORT          = _env_int("RDS_TRENDTRACKER_PORT", RDS_PORT)
+RDS_TRENDTRACKER_USER          = _env("RDS_TRENDTRACKER_USER", RDS_USER)
+RDS_TRENDTRACKER_PASSWORD      = _env("RDS_TRENDTRACKER_PASSWORD", RDS_PASSWORD)
+TUNNEL_TRENDTRACKER_LOCAL_PORT = _env_int("TUNNEL_TRENDTRACKER_LOCAL_PORT", 13308)
+
 # Worker
 WORKER_ID = _env("WORKER_ID", "rescrape-1")
 
 # Solr 접속 모드
 # [직접 모드] SOLR_DIRECT_ENABLED=true → SOLR_URL 과 아래 파라미터를 그대로 사용한다.
-# [DB 조회 모드] SOLR_DIRECT_ENABLED=false → DI_* 조건으로 trendtracker.t_di_config_v1 에서 모든 파라미터를 가져온다.
+# [DB 조회 모드] SOLR_DIRECT_ENABLED=false → DI_* 조건으로 trendtracker.t_di_config_v1 에서
+#   solr_url/filter_query만 가져온다. query/timeperiod/max_result_cnt는 이 모드에서도
+#   항상 아래 SOLR_QUERY/SLIDING_WINDOW_MINUTES/SOLR_MAX_DOCS(env) 값을 그대로 쓴다.
 SOLR_DIRECT_ENABLED    = _env_bool("SOLR_DIRECT_ENABLED")
 SOLR_URL               = _env("SOLR_URL", "")
 SOLR_QUERY             = _env("SOLR_QUERY", "").strip() or "*:*"  # 직접 모드 q 파라미터

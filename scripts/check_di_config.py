@@ -14,8 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app import config
-from app.repository.db import db_context
-from app.repository.di_config_repo import DiConfigRepo
+from app.repository.db import trendtracker_db_context
 from sqlalchemy import text
 
 
@@ -24,15 +23,16 @@ def main() -> None:
     print(f"  tnt_id       : {config.DI_TNT_ID}")
     print(f"  project_id   : {config.DI_PROJECT_ID}")
     print(f"  di_server_ip : {config.DI_SERVER_IP}")
+    print(f"  host         : {config.RDS_TRENDTRACKER_HOST}:{config.RDS_TRENDTRACKER_PORT}")
     print(f"  schema       : {config.RDS_TRENDTRACKER_DB}")
     print()
 
-    with db_context() as engine:
+    with trendtracker_db_context() as engine:
         with engine.connect() as conn:
             row = conn.execute(
-                text(f"""
+                text("""
                     SELECT *
-                    FROM {config.RDS_TRENDTRACKER_DB}.t_di_config_v1
+                    FROM t_di_config_v1
                     WHERE tnt_id       = :tnt_id
                       AND project_id   = :project_id
                       AND di_server_ip = :di_server_ip

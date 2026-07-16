@@ -23,6 +23,12 @@ discovery-worker → t_crawl_url → extraction-worker → Solr
     기준)에서 Solr 접속 정보를 조회하고, 재시작/다운타임에도 이어서 처리하도록 워커별
     "watermark" 파일(마지막 성공 동기화 시각)을 로컬에 유지한다
     (`SOLR_RESCRAPE_MAX_WATERMARK_LOOKBACK_MINUTES`만큼 소급).
+- **crawlerdb(`t_crawl_url`)와 trendtracker(`t_di_config_v1`)는 서로 다른 DB 서버에 있을 수
+  있다** — 두 스키마를 위한 SQLAlchemy 엔진이 분리돼 있다(`app/repository/db.py`의
+  `db_context()`/`trendtracker_db_context()`). trendtracker 접속 정보(`RDS_TRENDTRACKER_*`)를
+  지정하지 않으면 crawlerdb와 같은 서버라고 가정하고 `RDS_*` 값을 그대로 쓴다. SSH 터널을
+  쓰는 경우 bastion(`TUNNEL_SSH_HOST`/`USER`/`KEY_PATH`)은 공유하되, 접속 대상과 로컬
+  포워딩 포트(`TUNNEL_LOCAL_PORT` vs `TUNNEL_TRENDTRACKER_LOCAL_PORT`)만 분리된다.
 - Solr 스키마나 추출 로직에는 관여하지 않으며, `t_crawl_url`에 대해서만 쓰기 전용이다.
 - `t_crawl_url`/`t_di_config_v1` 등 어떤 테이블 스키마도 이 저장소가 마이그레이션 도구로
   관리하지 않는다(`t_crawl_url`은 discovery-worker 소관 `crawlerdb-migrations` 저장소가
@@ -106,14 +112,19 @@ docker run --env-file .env.prod rescrape-dispatcher:latest python -m app
 | 변수 | 설명 | 값 범위 / 기본값 |
 |---|---|---|
 | `APP_ENV` | `.env.{APP_ENV}` 선택 | `local`(기본) \| `dev` \| `prod` |
-| `RDS_PORT` | MySQL 포트 | 정수, 기본 `3306` |
-| `RDS_TRENDTRACKER_DB` | `t_di_config_v1` 조회 대상 스키마 | 기본 `trendtracker` |
-| `TUNNEL_ENABLED` | SSH 터널 사용 여부 | bool, 기본 `false` |
-| `TUNNEL_SSH_HOST` | bastion 호스트 | - |
-| `TUNNEL_SSH_PORT` | SSH 포트 | 정수, 기본 `22` |
-| `TUNNEL_SSH_USER` | SSH 사용자 | 기본 `ubuntu` |
-| `TUNNEL_SSH_KEY_PATH` | 개인키 경로 | - |
-| `TUNNEL_LOCAL_PORT` | 터널 로컬 포트 | 정수, 기본 `13307` |
+| `RDS_PORT` | MySQL 포트 (crawlerdb) | 정수, 기본 `3306` |
+| `RDS_TRENDTRACKER_DB` | `t_di_config_v1` 조회 대상 스키마 이름 | 기본 `trendtracker` |
+| `RDS_TRENDTRACKER_HOST` | trendtracker DB 호스트. **crawlerdb와 다른 서버일 때만 설정** | 미설정 시 `RDS_HOST`로 폴백 |
+| `RDS_TRENDTRACKER_PORT` | trendtracker DB 포트 | 정수, 미설정 시 `RDS_PORT`로 폴백 |
+| `RDS_TRENDTRACKER_USER` | trendtracker DB 사용자 | 미설정 시 `RDS_USER`로 폴백 |
+| `RDS_TRENDTRACKER_PASSWORD` | trendtracker DB 비밀번호 | 미설정 시 `RDS_PASSWORD`로 폴백 |
+| `TUNNEL_ENABLED` | SSH 터널 사용 여부 (crawlerdb/trendtracker 공통) | bool, 기본 `false` |
+| `TUNNEL_SSH_HOST` | bastion 호스트 (두 DB 접속이 공유) | - |
+| `TUNNEL_SSH_PORT` | SSH 포트 (공유) | 정수, 기본 `22` |
+| `TUNNEL_SSH_USER` | SSH 사용자 (공유) | 기본 `ubuntu` |
+| `TUNNEL_SSH_KEY_PATH` | 개인키 경로 (공유) | - |
+| `TUNNEL_LOCAL_PORT` | crawlerdb 터널의 로컬 포트 | 정수, 기본 `13307` |
+| `TUNNEL_TRENDTRACKER_LOCAL_PORT` | trendtracker 터널의 로컬 포트 (crawlerdb와 동시에 열려도 겹치지 않도록 분리) | 정수, 기본 `13308` |
 | `WORKER_ID` | 워커 식별자 (`--worker-id`로 override) | 문자열, 기본 `rescrape-1` |
 | `SOLR_DIRECT_ENABLED` | `true`=direct 모드, `false`=DB-lookup 모드 | bool, 기본 `false` |
 | `SOLR_URL` | Solr 코어 URL (direct 모드) | `http://localhost:8983/solr/news` |

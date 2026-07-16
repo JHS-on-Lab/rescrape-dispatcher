@@ -28,7 +28,7 @@ from datetime import datetime, timezone, timedelta
 import httpx
 
 from app import config
-from app.repository.db import db_context
+from app.repository.db import trendtracker_db_context
 from app.scheduling.dispatcher import resolve_di_config
 
 
@@ -47,7 +47,7 @@ def main() -> None:
                 f"(tnt_id={config.DI_TNT_ID} project_id={config.DI_PROJECT_ID}"
                 f" di_server_ip={config.DI_SERVER_IP})"
             )
-            with db_context() as engine:
+            with trendtracker_db_context() as engine:
                 di_config = resolve_di_config(engine)
     except RuntimeError as e:
         print(f"[오류] {e}")

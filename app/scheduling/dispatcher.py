@@ -25,7 +25,7 @@ from app import config
 from app.repository import watermark_store
 from app.repository.di_config_repo import DiConfigRepo
 from app.types import DiConfig, DispatchStats
-from app.repository.db import db_context
+from app.repository.db import db_context, trendtracker_db_context
 from app.repository.crawl_url_repo import CrawlUrlRepo
 from app.solr.client import SolrClient
 
@@ -66,19 +66,28 @@ def run_dispatch_loop(worker_id: str) -> None:
     last_heartbeat = time.monotonic()
     cycle = 0
 
+    # DI 설정 조회는 trendtracker(t_di_config_v1)에 대한 것으로, crawlerdb와 다른
+    # 서버일 수 있어 별도 엔진으로 딱 한 번(기동 시)만 연다 — 이후 사이클에서는
+    # Solr HTTP 호출과 로컬 워터마크 파일만 쓰고 trendtracker DB에 다시 접속하지 않는다.
+    if config.SOLR_DIRECT_ENABLED:
+        di_config = resolve_di_config()
+    else:
+        with trendtracker_db_context() as tt_engine:
+            di_config = resolve_di_config(tt_engine, worker_id)
+
+    logger.info(
+        f"solr: url='{di_config.solr_url}' "
+        f"q='{di_config.query}' "
+        f"filter_query='{di_config.filter_query or '(없음)'}' "
+        f"window={di_config.timeperiod}min "
+        f"max={di_config.max_result_cnt} "
+        f"url_contains='{config.SOLR_RESCRAPE_URL_CONTAINS or '(없음)'}' "
+        f"watermark={di_config.last_synced_at or '(없음, 순수 슬라이딩 윈도우)'}",
+        extra={"phase": "startup", "worker_id": worker_id},
+    )
+    solr = SolrClient(di_config)
+
     with db_context() as engine:
-        di_config = resolve_di_config(engine, worker_id)
-        logger.info(
-            f"solr: url='{di_config.solr_url}' "
-            f"q='{di_config.query}' "
-            f"filter_query='{di_config.filter_query or '(없음)'}' "
-            f"window={di_config.timeperiod}min "
-            f"max={di_config.max_result_cnt} "
-            f"url_contains='{config.SOLR_RESCRAPE_URL_CONTAINS or '(없음)'}' "
-            f"watermark={di_config.last_synced_at or '(없음, 순수 슬라이딩 윈도우)'}",
-            extra={"phase": "startup", "worker_id": worker_id},
-        )
-        solr = SolrClient(di_config)
         url_repo = CrawlUrlRepo(engine)
 
         try:

@@ -231,6 +231,31 @@ discovery-worker / extraction-worker 와 동일한 URL 정규화 로직을 `craw
 **도메인별 예외**: `v.daum.net`은 `?f=` 쿼리 파라미터를 정규화 시 별도로 제거한다
 (discovery-worker가 저장한 url_hash와 일치시키기 위한 특수 처리, `crawl_url_repo.py`).
 
+### 6.4 crawlerdb / trendtracker 접속 분리
+
+`t_crawl_url`(crawlerdb)과 `t_di_config_v1`(trendtracker)은 **서로 다른 DB 서버에
+있을 수 있다.** 과거에는 엔진 하나로 스키마 접두어(`{schema}.table`)만 바꿔 두 테이블에
+접근했는데, 이는 두 스키마가 같은 MySQL 서버(같은 host:port)에 있을 때만 동작하는
+방식이었다 — 서버 자체가 다르면 스키마 접두어로 크로스 서버 쿼리를 할 수 없다.
+
+지금은 `app/repository/db.py`에 엔진이 두 개다:
+
+- `db_context()` — `RDS_HOST`/`RDS_PORT`/`RDS_USER`/`RDS_PASSWORD`로 crawlerdb에 접속.
+- `trendtracker_db_context()` — `RDS_TRENDTRACKER_HOST`/`PORT`/`USER`/`PASSWORD`로
+  trendtracker에 접속. 이 값들을 지정하지 않으면 crawlerdb와 같은 서버라고 가정하고
+  `RDS_*` 값으로 폴백한다 — 기존처럼 한 서버에 두 스키마가 있는 배포는 `.env` 변경 없이
+  그대로 동작한다.
+
+SSH 터널을 쓰는 경우 bastion(`TUNNEL_SSH_HOST`/`PORT`/`USER`/`KEY_PATH`)은 두 접속이
+공유하지만, 접속 대상(`remote_bind_address`)과 로컬 포워딩 포트는 분리된다
+(`TUNNEL_LOCAL_PORT` vs `TUNNEL_TRENDTRACKER_LOCAL_PORT`, 기본 `13307`/`13308`) — 두
+터널이 동시에 열려도 로컬 포트가 겹치지 않는다.
+
+`DiConfigRepo`는 반드시 `trendtracker_db_context()`로 연 엔진을 받아야 한다.
+`resolve_di_config()`(`app/scheduling/dispatcher.py`)가 이 엔진 분리를 담당하며,
+DI 설정 조회는 기동 시 한 번만 일어난다(사이클마다 다시 조회하지 않음 — Solr HTTP
+호출과 로컬 워터마크 파일만으로 이후 루프가 돈다).
+
 ---
 
 ## 7. 스케줄링
@@ -254,10 +279,13 @@ app/
   types.py               # SolrDocument, DispatchStats
 
   repository/
-    db.py                # SSH 터널(옵션) + SQLAlchemy 엔진 context manager
+    db.py                # SSH 터널(옵션) + SQLAlchemy 엔진 context manager.
+                         # crawlerdb/trendtracker가 다른 서버일 수 있어 db_context()
+                         # (crawlerdb)와 trendtracker_db_context()(trendtracker)로 분리
     crawl_url_repo.py    # t_crawl_url bulk_insert_new() (t_domain.excluded 필터링 포함)
     domain_repo.py       # t_domain.excluded 조회 (도메인 차단 필터링용)
-    di_config_repo.py    # trendtracker.t_di_config_v1 조회 (DB-lookup 모드)
+    di_config_repo.py    # trendtracker.t_di_config_v1 조회 (DB-lookup 모드) —
+                         # 반드시 trendtracker_db_context() 엔진으로 호출해야 함
     watermark_store.py   # 워터마크 파일 read/write (DB-lookup 모드)
 
   solr/
@@ -277,14 +305,19 @@ app/
 | `RDS_PORT` | `3306` | MySQL 포트 |
 | `RDS_USER` | (필수) | MySQL 사용자 |
 | `RDS_PASSWORD` | (필수) | MySQL 비밀번호 |
-| `RDS_CRAWLER_DB` | (필수) | INSERT 대상 스키마 (t_crawl_url) |
-| `RDS_TRENDTRACKER_DB` | `trendtracker` | SELECT 대상 스키마 (t_di_config_v1) |
-| `TUNNEL_ENABLED` | `false` | SSH 터널 사용 여부 |
-| `TUNNEL_SSH_HOST` | — | SSH 서버 호스트 |
-| `TUNNEL_SSH_PORT` | `22` | SSH 서버 포트 |
-| `TUNNEL_SSH_USER` | `ubuntu` | SSH 사용자 |
-| `TUNNEL_SSH_KEY_PATH` | — | SSH 키 파일 경로 |
-| `TUNNEL_LOCAL_PORT` | `13307` | 로컬 터널 포트 |
+| `RDS_CRAWLER_DB` | (필수) | INSERT 대상 스키마 이름 (t_crawl_url) |
+| `RDS_TRENDTRACKER_DB` | `trendtracker` | SELECT 대상 스키마 이름 (t_di_config_v1) |
+| `RDS_TRENDTRACKER_HOST` | `RDS_HOST`로 폴백 | trendtracker DB 호스트. crawlerdb와 다른 서버일 때만 설정 |
+| `RDS_TRENDTRACKER_PORT` | `RDS_PORT`로 폴백 | trendtracker DB 포트 |
+| `RDS_TRENDTRACKER_USER` | `RDS_USER`로 폴백 | trendtracker DB 사용자 |
+| `RDS_TRENDTRACKER_PASSWORD` | `RDS_PASSWORD`로 폴백 | trendtracker DB 비밀번호 |
+| `TUNNEL_ENABLED` | `false` | SSH 터널 사용 여부 (crawlerdb/trendtracker 공통) |
+| `TUNNEL_SSH_HOST` | — | SSH 서버 호스트 (공유) |
+| `TUNNEL_SSH_PORT` | `22` | SSH 서버 포트 (공유) |
+| `TUNNEL_SSH_USER` | `ubuntu` | SSH 사용자 (공유) |
+| `TUNNEL_SSH_KEY_PATH` | — | SSH 키 파일 경로 (공유) |
+| `TUNNEL_LOCAL_PORT` | `13307` | crawlerdb 터널의 로컬 포트 |
+| `TUNNEL_TRENDTRACKER_LOCAL_PORT` | `13308` | trendtracker 터널의 로컬 포트 (crawlerdb와 별개) |
 | `WORKER_ID` | `rescrape-1` | 워커 식별자 |
 | `SOLR_DIRECT_ENABLED` | `false` | `true`=direct 모드(env의 `SOLR_URL` 직접 사용), `false`=DB-lookup 모드(`t_di_config_v1` 조회) |
 | `SOLR_URL` | `` (direct 모드일 때만 사용) | Solr 코어 URL — **`config.validate()`가 검증하지 않음**. direct 모드에서 비워두면 기동은 성공하고 매 사이클 Solr 요청만 조용히 실패한다 |

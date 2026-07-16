@@ -40,8 +40,8 @@ def main() -> None:
                 f"(tnt_id={config.DI_TNT_ID} project_id={config.DI_PROJECT_ID}"
                 f" di_server_ip={config.DI_SERVER_IP})"
             )
-            from app.repository.db import db_context
-            with db_context() as engine:
+            from app.repository.db import trendtracker_db_context
+            with trendtracker_db_context() as engine:
                 di_config = resolve_di_config(engine)
     except RuntimeError as e:
         print(f"[오류] {e}")
