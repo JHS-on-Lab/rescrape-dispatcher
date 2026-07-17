@@ -6,10 +6,10 @@ DB 연결 관리: SSH 터널(선택) + SQLAlchemy 엔진.
   - trendtracker_db_context() : trendtracker (t_di_config_v1) — DB 조회 모드 전용
 
 두 스키마가 서로 다른 DB 서버에 있을 수 있어 엔진을 분리했다. SSH 터널을 쓰는
-경우 bastion(TUNNEL_SSH_HOST/PORT/USER/KEY_PATH)은 두 접속이 공유하고, 접속
-대상(host/port)과 로컬 포워딩 포트만 각자 분리된다
-(TUNNEL_LOCAL_PORT / TUNNEL_TRENDTRACKER_LOCAL_PORT) — 두 터널이 동시에 열려도
-서로 다른 로컬 포트를 쓰므로 충돌하지 않는다.
+경우 bastion과 로컬 포워딩 포트(TUNNEL_SSH_HOST/PORT/USER/KEY_PATH,
+TUNNEL_LOCAL_PORT) 전부를 두 접속이 공유한다 — db_context()와
+trendtracker_db_context()는 코드 어디에서도 동시에(nested로) 열리지 않고 항상
+하나가 닫힌 뒤 다음이 열리므로, 로컬 포트를 나눌 필요가 없다.
 
 사용법:
     with db_context() as engine:

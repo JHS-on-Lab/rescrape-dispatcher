@@ -59,14 +59,14 @@ RDS_TRENDTRACKER_DB  = _env("RDS_TRENDTRACKER_DB", "trendtracker")  # SELECT 대
 # trendtracker(t_di_config_v1)는 crawlerdb와 다른 DB 서버에 있을 수 있어 접속 정보를
 # 별도로 둔다. 값을 지정하지 않으면 위 crawlerdb 접속 정보를 그대로 쓰므로, 두 스키마가
 # 같은 서버에 있는 기존 배포는 .env 변경 없이 그대로 동작한다.
-# SSH 터널은 crawlerdb와 같은 bastion(TUNNEL_SSH_HOST/PORT/USER/KEY_PATH)을 공유하고,
-# 접속 대상(host/port)과 로컬 포워딩 포트만 분리한다(둘 다 TUNNEL_ENABLED=true면
-# 동시에 열리는 두 터널이 서로 다른 로컬 포트를 써야 하기 때문).
+# SSH 터널은 crawlerdb와 같은 bastion(TUNNEL_SSH_HOST/PORT/USER/KEY_PATH)과 같은 로컬
+# 포워딩 포트(TUNNEL_LOCAL_PORT)를 그대로 공유한다 — db_context()/trendtracker_db_context()
+# 는 항상 순차적으로만 쓰이고(하나가 끝나야 다음이 열림) 절대 동시에 열리지 않으므로
+# 로컬 포트를 나눌 필요가 없다.
 RDS_TRENDTRACKER_HOST          = _env("RDS_TRENDTRACKER_HOST", RDS_HOST)
 RDS_TRENDTRACKER_PORT          = _env_int("RDS_TRENDTRACKER_PORT", RDS_PORT)
 RDS_TRENDTRACKER_USER          = _env("RDS_TRENDTRACKER_USER", RDS_USER)
 RDS_TRENDTRACKER_PASSWORD      = _env("RDS_TRENDTRACKER_PASSWORD", RDS_PASSWORD)
-TUNNEL_TRENDTRACKER_LOCAL_PORT = _env_int("TUNNEL_TRENDTRACKER_LOCAL_PORT", 13308)
 
 # Worker
 WORKER_ID = _env("WORKER_ID", "rescrape-1")
